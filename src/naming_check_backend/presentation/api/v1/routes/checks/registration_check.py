@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
-from naming_check_backend.application.use_cases.stage1.registration_check import RegistrationCheckUseCase
+from naming_check_backend.application.use_cases.stage1.registration_check import (
+    RegistrationCheckUseCase,
+)
 
 router = APIRouter()
 use_case = RegistrationCheckUseCase()

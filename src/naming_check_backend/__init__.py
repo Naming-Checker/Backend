@@ -1,1 +1,1 @@
-"""Naming check backend package."""
+"""Reusable backend package."""
