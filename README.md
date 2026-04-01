@@ -1,53 +1,37 @@
-> **Note**: This document was created with AI assistance (AI-generated).  
-> Update it as the backend structure evolves.
+# Naming Checker — Backend
 
-# Backend Scaffold
+HTTP API для сервиса проверки нейминга с целью помочь юристам определять схожие названия и логотипы. Каркас на **FastAPI**, слои: domain -> application -> infrastructure / presentation.
 
-Backend skeleton for the naming check service using `Python + FastAPI` and onion architecture.
+## Технологии
 
-## Layers
+- Python 3.10–3.11  
+- FastAPI, Uvicorn  
+- Pydantic / pydantic-settings  
+- pytest, httpx, Ruff, mypy
 
-- `domain/`: core business concepts, entities, value objects, repository contracts, policies
-- `application/`: use cases, DTOs, orchestration logic, ports/interfaces
-- `infrastructure/`: database, search, ML, preprocessing, collectors, config
-- `presentation/`: FastAPI entrypoints, routers, API schemas, dependencies
-- `shared/`: cross-cutting helpers shared across layers
+## Локальный запуск
 
-## Runtime-aligned structure
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+uvicorn naming_check_backend.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-The backend still follows onion architecture, but the internal modules now reflect the updated runtime
-contours from the architecture diagrams:
+Документация OpenAPI: http://127.0.0.1:8000/docs  
 
-- `presentation/api/v1/routes/checks/`: synchronous Stage 1 HTTP entrypoints
-- `presentation/api/v1/routes/webhooks/`: Stage 2 webhook callbacks
-- `application/use_cases/stage1/`: internal check orchestration
-- `application/use_cases/stage2/`: async dispatch and webhook callback processing
-- `application/use_cases/offline/`: offline collection and refresh flows
-- `domain/policies/`: pure business rules such as Stage 2 deduplication keys
-- `infrastructure/async_pipeline/`: queue, worker, result delivery, async result store
-- `infrastructure/collectors/`: external source collection adapters
-- `infrastructure/observability/`: async monitoring and thresholds
+Переменные окружения (при необходимости) — в `.env`; см. `src/naming_check_backend/shared/settings.py`.
 
-## Planned business capabilities
+Тесты:
 
-- registration check for new namings
-- text infringement check
-- logo comparison
-- offline data collection and preprocessing
-- source aggregation and ranking
+```bash
+make test
+```
 
-## Dependency rule
+## Участие
 
-Outer layers may depend on inner layers:
-- `presentation -> application -> domain`
-- `infrastructure -> application / domain`
-- `domain` does not depend on `application`, `infrastructure`, or `presentation`
-
-## Test layout
-
-Tests stay split by type, but now mirror the architecture more explicitly:
-
-- `tests/unit/domain/`: pure business rules
-- `tests/unit/application/`: orchestration logic and job preparation
-- `tests/integration/api/`: HTTP routes for Stage 1
-- `tests/integration/webhooks/`: Stage 2 webhook contract
+1. Форкните репозиторий или получите доступ к организации.  
+2. Ветка от `main`, осмысленное имя (`feature/...`, `fix/...`).  
+3. Коммиты с понятным сообщением.  
+4. Pull request с кратким описанием изменений; убедитесь, что `make test` и линтеры проходят (`make format`, `make lint` по проекту).
