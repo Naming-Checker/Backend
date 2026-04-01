@@ -10,7 +10,7 @@ TXT_RESET := \e[0m
 .PHONY: start stop migrations docker-migrations-up docker-migrations-down \
 	docker-migrations-create isort black format ruff_format ruff_lint \
 	flake8 mypy lint test test-ci ruff-ci mypy-ci docker-test \
-	docker-auto_test check
+	docker-auto_test ci check
 
 start:
 	docker-compose up --build -d
@@ -87,6 +87,8 @@ mypy-ci:
 	@printf "${TXT_BOLD}${TXT_MAGENTA}============================ MYPY ================================${TXT_RESET}\n"
 	@$(PYTHON) -m mypy --config-file pyproject.toml
 	@printf "${TXT_BOLD}${TXT_MAGENTA}========================== END MYPY ==============================${TXT_RESET}\n"
+
+ci: ruff-ci mypy-ci test-ci
 
 docker-test:
 	@docker-compose run --rm app pytest $(or $(target), tests) -p no:warnings -vv
