@@ -1,19 +1,19 @@
-# Backend Scaffold
+# Naming Checker — Backend
 
-Шаблон HTTP API на **FastAPI** с `src`-layout и разделением на слои `domain -> application -> infrastructure / presentation`.
+HTTP API для сервиса проверки нейминга с целью помочь юристам определять схожие названия и логотипы. Каркас на **FastAPI**, слои: domain -> application -> infrastructure / presentation.
 
 ## Технологии
 
 - Python 3.10–3.11  
 - FastAPI, Uvicorn  
 - Pydantic / pydantic-settings  
-- pytest, pytest-cov, httpx, Ruff, mypy
+- pytest, httpx, Ruff, mypy
 
 ## Локальный запуск
 
 ```bash
 cd backend
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python src/manage.py run-server
@@ -23,11 +23,9 @@ python src/manage.py run-server
 
 Переменные окружения (при необходимости) — в `.env`; см. `src/naming_check_backend/shared/settings.py`.
 
-## Проверки качества
+Тесты:
 
 ```bash
-make format
-make lint
 make test
 ```
 
@@ -36,4 +34,4 @@ make test
 1. Форкните репозиторий или получите доступ к организации.  
 2. Ветка от `main`, осмысленное имя (`feature/...`, `fix/...`).  
 3. Коммиты с понятным сообщением.  
-4. Pull request с кратким описанием изменений; перед отправкой убедитесь, что форматирование, линтер, type-check и тесты проходят локально.
+4. Pull request с кратким описанием изменений; убедитесь, что `make test` и линтеры проходят (`make format`, `make lint` по проекту).
