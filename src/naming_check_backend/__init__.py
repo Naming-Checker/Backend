@@ -1,0 +1,1 @@
+"""Naming check backend package."""
