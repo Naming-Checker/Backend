@@ -20,6 +20,7 @@ python src/manage.py run-server
 ```
 
 Документация OpenAPI: http://127.0.0.1:8000/docs  
+Интеграционные контракты: `../system_analysis/docs/api_contracts.md`  
 
 Переменные окружения (при необходимости) — в `.env`; см. `src/naming_check_backend/shared/settings.py`.
 
