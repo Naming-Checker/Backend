@@ -5,14 +5,15 @@ from naming_check_backend.application.use_cases.stage1.text_infringement_check i
 )
 from naming_check_backend.presentation.api.dependencies import COMMON_ERROR_RESPONSES
 from naming_check_backend.presentation.schemas import (
-    FlowType,
-    MatchCandidate,
-    ProcessingStatus,
-    SimilarityBreakdown,
-    Stage1Meta,
-    Stage2StatusInfo,
     TextInfringementRequest,
     TextInfringementResponse,
+)
+from naming_check_backend.presentation.schemas.mappers import (
+    to_flow_type,
+    to_match_candidate,
+    to_processing_status,
+    to_stage1_meta,
+    to_stage2_status,
 )
 
 router = APIRouter()
@@ -32,40 +33,21 @@ use_case = TextInfringementCheckUseCase()
 def submit_text_infringement_check(
     payload: TextInfringementRequest,
 ) -> TextInfringementResponse:
-    protected_naming = " ".join(payload.protected_naming.split())
-    suspicious_naming = " ".join(payload.suspicious_naming.split())
-    request_id = f"txt-{'-'.join(suspicious_naming.casefold().split())}-001"
-    internal_results = [
-        MatchCandidate(
-            candidate_id="tm-002",
-            candidate_name=suspicious_naming,
-            source="trademark_db",
-            mktu_codes=payload.mktu_codes,
-            similarity=94.2,
-            summary="Pairwise comparison found the same dominant verbal core.",
-            similarity_breakdown=SimilarityBreakdown(
-                semantic=82.0,
-                phonetic=98.0,
-                graphic=93.0,
-                legal=95.0,
-            ),
-        )
-    ]
+    check_request, result_set, pair_similarity = use_case.execute(
+        payload.protected_naming,
+        payload.suspicious_naming,
+        payload.mktu_codes,
+    )
+    payload_data = check_request.payload
     return TextInfringementResponse(
-        request_id=request_id,
-        flow=FlowType.TEXT_INFRINGEMENT,
-        status=ProcessingStatus.COMPLETED,
-        protected_naming=protected_naming,
-        suspicious_naming=suspicious_naming,
-        mktu_codes=payload.mktu_codes,
-        pair_similarity=94.2,
-        internal_results=internal_results,
-        stage2=Stage2StatusInfo(
-            status=ProcessingStatus.ACCEPTED,
-            correlation_id=request_id,
-        ),
-        meta=Stage1Meta(
-            internal_result_count=len(internal_results),
-            stage2_enabled=True,
-        ),
+        request_id=check_request.request_id,
+        flow=to_flow_type(check_request),
+        status=to_processing_status(check_request),
+        protected_naming=payload_data.protected_naming.raw.strip(),
+        suspicious_naming=payload_data.suspicious_naming.raw.strip(),
+        mktu_codes=check_request.mktu_codes.as_list(),
+        pair_similarity=pair_similarity.total,
+        internal_results=[to_match_candidate(candidate) for candidate in result_set.candidates],
+        stage2=to_stage2_status(check_request),
+        meta=to_stage1_meta(result_set),
     )

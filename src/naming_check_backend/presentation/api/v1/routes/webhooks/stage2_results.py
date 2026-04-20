@@ -22,8 +22,9 @@ use_case = WebhookCallbackProcessingUseCase()
     ),
 )
 def receive_stage2_result(payload: Stage2WebhookRequest) -> Stage2WebhookResponse:
+    stage2_job = use_case.execute(payload.correlation_id, payload.partial)
     return Stage2WebhookResponse(
-        correlation_id=payload.correlation_id,
-        partial=payload.partial,
+        correlation_id=stage2_job.correlation_id,
+        partial=stage2_job.partial_results_allowed,
         use_case=use_case.__class__.__name__,
     )

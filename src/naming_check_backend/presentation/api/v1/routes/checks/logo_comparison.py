@@ -3,14 +3,16 @@ from fastapi import APIRouter
 from naming_check_backend.application.use_cases.stage1.logo_comparison import LogoComparisonUseCase
 from naming_check_backend.presentation.api.dependencies import COMMON_ERROR_RESPONSES
 from naming_check_backend.presentation.schemas import (
-    FlowType,
     LogoComparisonRequest,
     LogoComparisonResponse,
-    MatchCandidate,
-    ProcessingStatus,
-    SimilarityBreakdown,
-    Stage1Meta,
-    Stage2StatusInfo,
+)
+from naming_check_backend.presentation.schemas.mappers import (
+    to_flow_type,
+    to_logo_asset_ref,
+    to_match_candidate,
+    to_processing_status,
+    to_stage1_meta,
+    to_stage2_status,
 )
 
 router = APIRouter()
@@ -28,39 +30,33 @@ use_case = LogoComparisonUseCase()
     ),
 )
 def submit_logo_comparison(payload: LogoComparisonRequest) -> LogoComparisonResponse:
-    request_id = f"logo-{payload.reference_logo.asset_ref.rsplit('/', maxsplit=1)[-1]}-001"
-    internal_results = [
-        MatchCandidate(
-            candidate_id="logo-001",
-            candidate_name="Internal similar visual mark",
-            source="trademark_db",
-            mktu_codes=payload.mktu_codes,
-            similarity=88.6,
-            summary="Similar visual silhouette and retained text element.",
-            similarity_breakdown=SimilarityBreakdown(
-                visual=88.6,
-                legal=85.0,
-            ),
-        )
-    ]
+    check_request, result_set, comparison_summary = use_case.execute(
+        to_logo_asset_ref(payload.reference_logo),
+        to_logo_asset_ref(payload.suspicious_logo),
+        payload.mktu_codes,
+    )
+    payload_data = check_request.payload
     return LogoComparisonResponse(
-        request_id=request_id,
-        flow=FlowType.LOGO_COMPARISON,
-        status=ProcessingStatus.COMPLETED,
-        reference_logo=payload.reference_logo,
-        suspicious_logo=payload.suspicious_logo,
-        mktu_codes=payload.mktu_codes,
-        internal_results=internal_results,
-        comparison_summary=(
-            "Placeholder Stage 1 response with internal logo matches. Final file transport "
-            "format will be уточнен separately."
+        request_id=check_request.request_id,
+        flow=to_flow_type(check_request),
+        status=to_processing_status(check_request),
+        reference_logo=payload.reference_logo.model_copy(
+            update={
+                "asset_ref": payload_data.reference_logo.asset_ref,
+                "media_type": payload_data.reference_logo.media_type,
+                "filename": payload_data.reference_logo.filename,
+            }
         ),
-        stage2=Stage2StatusInfo(
-            status=ProcessingStatus.ACCEPTED,
-            correlation_id=request_id,
+        suspicious_logo=payload.suspicious_logo.model_copy(
+            update={
+                "asset_ref": payload_data.suspicious_logo.asset_ref,
+                "media_type": payload_data.suspicious_logo.media_type,
+                "filename": payload_data.suspicious_logo.filename,
+            }
         ),
-        meta=Stage1Meta(
-            internal_result_count=len(internal_results),
-            stage2_enabled=True,
-        ),
+        mktu_codes=check_request.mktu_codes.as_list(),
+        internal_results=[to_match_candidate(candidate) for candidate in result_set.candidates],
+        comparison_summary=comparison_summary,
+        stage2=to_stage2_status(check_request),
+        meta=to_stage1_meta(result_set),
     )

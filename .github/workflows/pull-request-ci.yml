@@ -1,4 +1,4 @@
-name: Pull Request CI
+name: Backend Pull Request CI
 
 on:
   pull_request:
@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  checks:
-    name: Ruff, mypy, pytest
+  required-checks:
+    name: backend-required-checks
     runs-on: ubuntu-latest
 
     steps:

@@ -4,15 +4,13 @@ from naming_check_backend.application.use_cases.stage1.registration_check import
     RegistrationCheckUseCase,
 )
 from naming_check_backend.presentation.api.dependencies import COMMON_ERROR_RESPONSES
-from naming_check_backend.presentation.schemas import (
-    FlowType,
-    MatchCandidate,
-    ProcessingStatus,
-    RegistrationCheckRequest,
-    RegistrationCheckResponse,
-    SimilarityBreakdown,
-    Stage1Meta,
-    Stage2StatusInfo,
+from naming_check_backend.presentation.schemas import RegistrationCheckRequest, RegistrationCheckResponse
+from naming_check_backend.presentation.schemas.mappers import (
+    to_flow_type,
+    to_match_candidate,
+    to_processing_status,
+    to_stage1_meta,
+    to_stage2_status,
 )
 
 router = APIRouter()
@@ -30,37 +28,15 @@ use_case = RegistrationCheckUseCase()
     ),
 )
 def submit_registration_check(payload: RegistrationCheckRequest) -> RegistrationCheckResponse:
-    normalized_name = " ".join(payload.naming.split())
-    request_id = f"reg-{'-'.join(normalized_name.casefold().split())}-001"
-    internal_results = [
-        MatchCandidate(
-            candidate_id="tm-001",
-            candidate_name=f"{normalized_name} PRIME",
-            source="trademark_db",
-            mktu_codes=payload.mktu_codes,
-            similarity=91.4,
-            summary="Internal trademark candidate with a strong phonetic and legal overlap.",
-            similarity_breakdown=SimilarityBreakdown(
-                semantic=84.0,
-                phonetic=96.0,
-                graphic=88.0,
-                legal=90.0,
-            ),
-        )
-    ]
+    check_request, result_set = use_case.execute(payload.naming, payload.mktu_codes)
+    payload_data = check_request.payload
     return RegistrationCheckResponse(
-        request_id=request_id,
-        flow=FlowType.REGISTRATION_CHECK,
-        status=ProcessingStatus.COMPLETED,
-        naming=normalized_name,
-        mktu_codes=payload.mktu_codes,
-        internal_results=internal_results,
-        stage2=Stage2StatusInfo(
-            status=ProcessingStatus.ACCEPTED,
-            correlation_id=request_id,
-        ),
-        meta=Stage1Meta(
-            internal_result_count=len(internal_results),
-            stage2_enabled=True,
-        ),
+        request_id=check_request.request_id,
+        flow=to_flow_type(check_request),
+        status=to_processing_status(check_request),
+        naming=payload_data.naming.raw.strip(),
+        mktu_codes=check_request.mktu_codes.as_list(),
+        internal_results=[to_match_candidate(candidate) for candidate in result_set.candidates],
+        stage2=to_stage2_status(check_request),
+        meta=to_stage1_meta(result_set),
     )
