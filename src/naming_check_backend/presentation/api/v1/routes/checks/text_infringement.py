@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from naming_check_backend.application.use_cases.stage1.text_infringement_check import (
     TextInfringementCheckUseCase,
 )
+from naming_check_backend.domain.entities import TextInfringementPayload
 from naming_check_backend.presentation.api.dependencies import COMMON_ERROR_RESPONSES
 from naming_check_backend.presentation.schemas import (
     TextInfringementRequest,
@@ -39,6 +40,8 @@ def submit_text_infringement_check(
         payload.mktu_codes,
     )
     payload_data = check_request.payload
+    if not isinstance(payload_data, TextInfringementPayload):
+        raise TypeError("Unexpected payload type for text_infringement flow.")
     return TextInfringementResponse(
         request_id=check_request.request_id,
         flow=to_flow_type(check_request),

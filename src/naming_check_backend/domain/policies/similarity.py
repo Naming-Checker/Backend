@@ -1,4 +1,7 @@
-from naming_check_backend.domain.value_objects.similarity import SimilarityBreakdown, SimilarityScore
+from naming_check_backend.domain.value_objects.similarity import (
+    SimilarityBreakdown,
+    SimilarityScore,
+)
 
 
 def build_similarity_score(

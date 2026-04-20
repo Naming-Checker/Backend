@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from naming_check_backend.domain.exceptions import DomainError
@@ -8,7 +9,7 @@ class MktuClassSet:
     values: tuple[int, ...]
 
     @classmethod
-    def from_iterable(cls, values: list[int | str] | tuple[int | str, ...]) -> "MktuClassSet":
+    def from_iterable(cls, values: Iterable[int | str]) -> "MktuClassSet":
         normalized: set[int] = set()
         for value in values:
             code = int(value)

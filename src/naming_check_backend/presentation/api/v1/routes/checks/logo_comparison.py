@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from naming_check_backend.application.use_cases.stage1.logo_comparison import LogoComparisonUseCase
+from naming_check_backend.domain.entities import LogoComparisonPayload
 from naming_check_backend.presentation.api.dependencies import COMMON_ERROR_RESPONSES
 from naming_check_backend.presentation.schemas import (
     LogoComparisonRequest,
@@ -36,6 +37,8 @@ def submit_logo_comparison(payload: LogoComparisonRequest) -> LogoComparisonResp
         payload.mktu_codes,
     )
     payload_data = check_request.payload
+    if not isinstance(payload_data, LogoComparisonPayload):
+        raise TypeError("Unexpected payload type for logo_comparison flow.")
     return LogoComparisonResponse(
         request_id=check_request.request_id,
         flow=to_flow_type(check_request),

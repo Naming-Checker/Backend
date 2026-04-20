@@ -8,7 +8,10 @@ from naming_check_backend.domain.entities.check_request import (
     RegistrationPayload,
     TextInfringementPayload,
 )
-from naming_check_backend.domain.entities.conflict_result_set import ConflictResultSet, MatchCandidate
+from naming_check_backend.domain.entities.conflict_result_set import (
+    ConflictResultSet,
+    MatchCandidate,
+)
 from naming_check_backend.domain.entities.stage2_job import DeliveryChannel, Stage2Job
 
 __all__ = [

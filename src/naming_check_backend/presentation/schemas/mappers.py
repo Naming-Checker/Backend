@@ -1,5 +1,10 @@
 from naming_check_backend.domain.entities import CheckRequest, ConflictResultSet, MatchCandidate
-from naming_check_backend.domain.value_objects import LogoAssetRef, SimilarityBreakdown as DomainBreakdown
+from naming_check_backend.domain.value_objects import (
+    LogoAssetRef,
+)
+from naming_check_backend.domain.value_objects import (
+    SimilarityBreakdown as DomainBreakdown,
+)
 from naming_check_backend.presentation.schemas.contracts import (
     FlowType,
     LogoAssetReference,
@@ -7,6 +12,9 @@ from naming_check_backend.presentation.schemas.contracts import (
     SimilarityBreakdown,
     Stage1Meta,
     Stage2StatusInfo,
+)
+from naming_check_backend.presentation.schemas.contracts import (
+    MatchCandidate as MatchCandidateSchema,
 )
 
 
@@ -26,9 +34,7 @@ def _to_similarity_breakdown(breakdown: DomainBreakdown | None) -> SimilarityBre
     )
 
 
-def to_match_candidate(candidate: MatchCandidate) -> "MatchCandidateSchema":
-    from naming_check_backend.presentation.schemas.contracts import MatchCandidate as MatchCandidateSchema
-
+def to_match_candidate(candidate: MatchCandidate) -> MatchCandidateSchema:
     return MatchCandidateSchema(
         candidate_id=candidate.candidate_id,
         candidate_name=candidate.candidate_name,

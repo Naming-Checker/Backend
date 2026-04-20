@@ -3,8 +3,12 @@ from fastapi import APIRouter
 from naming_check_backend.application.use_cases.stage1.registration_check import (
     RegistrationCheckUseCase,
 )
+from naming_check_backend.domain.entities import RegistrationPayload
 from naming_check_backend.presentation.api.dependencies import COMMON_ERROR_RESPONSES
-from naming_check_backend.presentation.schemas import RegistrationCheckRequest, RegistrationCheckResponse
+from naming_check_backend.presentation.schemas import (
+    RegistrationCheckRequest,
+    RegistrationCheckResponse,
+)
 from naming_check_backend.presentation.schemas.mappers import (
     to_flow_type,
     to_match_candidate,
@@ -30,6 +34,8 @@ use_case = RegistrationCheckUseCase()
 def submit_registration_check(payload: RegistrationCheckRequest) -> RegistrationCheckResponse:
     check_request, result_set = use_case.execute(payload.naming, payload.mktu_codes)
     payload_data = check_request.payload
+    if not isinstance(payload_data, RegistrationPayload):
+        raise TypeError("Unexpected payload type for registration_check flow.")
     return RegistrationCheckResponse(
         request_id=check_request.request_id,
         flow=to_flow_type(check_request),
