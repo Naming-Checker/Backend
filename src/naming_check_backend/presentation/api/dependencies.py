@@ -2,8 +2,9 @@
 
 from typing import Any
 
-from fastapi import status
+from fastapi import Request, status
 
+from naming_check_backend.application.use_cases.stage1.logo_comparison import LogoComparisonUseCase
 from naming_check_backend.presentation.schemas import ErrorResponse
 
 COMMON_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -24,3 +25,9 @@ COMMON_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
         "description": "Unexpected backend failure.",
     },
 }
+
+_default_logo_use_case = LogoComparisonUseCase()
+
+
+def get_logo_comparison_use_case(request: Request) -> LogoComparisonUseCase:
+    return getattr(request.app.state, "logo_comparison_use_case", _default_logo_use_case)
