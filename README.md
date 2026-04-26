@@ -30,6 +30,48 @@ python src/manage.py run-server
 make test
 ```
 
+## Logo Comparison MVP (VisualModel)
+
+В `logo_comparison` доступен MVP-режим in-process интеграции с `VisualModel`.
+
+Включение через `.env`:
+
+```bash
+VISUALMODEL_ENABLED=true
+VISUALMODEL_SIMILARITY_MODULE_PATH=../VisualModel/src/similarity.py
+VISUALMODEL_EMBEDDINGS_PATH=../VisualModel/models/logos_embedding.pt
+VISUALMODEL_ASSETS_ROOT=../VisualModel/data/logos
+VISUALMODEL_TOP_K=10
+VISUALMODEL_SCORE_THRESHOLD=0
+VISUALMODEL_SOURCE=visual_model
+```
+
+Smoke-запрос:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/logo-comparison" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reference_logo": {
+      "asset_ref": "file:///absolute/path/to/query-logo.png",
+      "media_type": "image/png",
+      "filename": "query-logo.png"
+    },
+    "suspicious_logo": {
+      "asset_ref": "logo://suspicious/probi-market.png",
+      "media_type": "image/png",
+      "filename": "probi-market.png"
+    },
+    "mktu_codes": [35]
+  }'
+```
+
+Примечания:
+
+- Для MVP `asset_ref` поддерживает `file://...`, `logo://...` и обычный путь.
+- Если `VISUALMODEL_ENABLED=false`, endpoint работает в режиме placeholder-ответа.
+- Для рабочего VisualModel-режима должны быть доступны `torch/torchvision` и файлы embeddings.
+
 ## CI/CD
 
 ### Merge gate

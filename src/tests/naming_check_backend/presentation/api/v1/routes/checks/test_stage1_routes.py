@@ -1,4 +1,8 @@
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+from naming_check_backend.application.use_cases.stage1.logo_comparison import LogoComparisonUseCase
+from naming_check_backend.infrastructure.ml.visual_model_adapter import VisualModelMatch
 
 
 def test_registration_check_route_is_wired(client: TestClient) -> None:
@@ -69,3 +73,73 @@ def test_openapi_exposes_contract_schemas(client: TestClient) -> None:
     ].endswith("/Stage2WebhookResponse")
     assert "RegistrationCheckRequest" in document["components"]["schemas"]
     assert "ErrorResponse" in document["components"]["schemas"]
+
+
+class _FakeVisualModelAdapter:
+    def find_similar(self, image_path: str) -> list[VisualModelMatch]:
+        return [
+            VisualModelMatch(
+                image_path="/tmp/catalog/probimax-mark.png",
+                score_percent=77.3,
+            )
+        ]
+
+
+class _MissingFileAdapter:
+    def find_similar(self, image_path: str) -> list[VisualModelMatch]:
+        raise FileNotFoundError(f"Logo image not found: {image_path}")
+
+
+def test_logo_comparison_uses_visualmodel_adapter(fastapi_app: FastAPI, client: TestClient) -> None:
+    fastapi_app.state.logo_comparison_use_case = LogoComparisonUseCase(
+        visual_model_adapter=_FakeVisualModelAdapter()
+    )
+    response = client.post(
+        "/api/v1/logo-comparison",
+        json={
+            "reference_logo": {
+                "asset_ref": "file:///tmp/query-logo.png",
+                "media_type": "image/png",
+                "filename": "query-logo.png",
+            },
+            "suspicious_logo": {
+                "asset_ref": "logo://suspicious/probi-market.png",
+                "media_type": "image/png",
+                "filename": "probi-market.png",
+            },
+            "mktu_codes": [35],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["comparison_summary"].startswith("Stage 1 logo comparison produced")
+    assert body["internal_results"][0]["source"] == "visual_model"
+    assert body["internal_results"][0]["similarity_breakdown"]["visual"] == 77.3
+
+
+def test_logo_comparison_returns_400_when_reference_asset_missing(
+    fastapi_app: FastAPI, client: TestClient
+) -> None:
+    fastapi_app.state.logo_comparison_use_case = LogoComparisonUseCase(
+        visual_model_adapter=_MissingFileAdapter()
+    )
+    response = client.post(
+        "/api/v1/logo-comparison",
+        json={
+            "reference_logo": {
+                "asset_ref": "file:///tmp/missing-logo.png",
+                "media_type": "image/png",
+                "filename": "missing-logo.png",
+            },
+            "suspicious_logo": {
+                "asset_ref": "logo://suspicious/probi-market.png",
+                "media_type": "image/png",
+                "filename": "probi-market.png",
+            },
+            "mktu_codes": [35],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Logo image not found" in response.json()["detail"]

@@ -1,8 +1,13 @@
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
 
 from naming_check_backend.application.use_cases.stage1.logo_comparison import LogoComparisonUseCase
 from naming_check_backend.domain.entities import LogoComparisonPayload
-from naming_check_backend.presentation.api.dependencies import COMMON_ERROR_RESPONSES
+from naming_check_backend.presentation.api.dependencies import (
+    COMMON_ERROR_RESPONSES,
+    get_logo_comparison_use_case,
+)
 from naming_check_backend.presentation.schemas import (
     LogoComparisonRequest,
     LogoComparisonResponse,
@@ -17,7 +22,6 @@ from naming_check_backend.presentation.schemas.mappers import (
 )
 
 router = APIRouter()
-use_case = LogoComparisonUseCase()
 
 
 @router.post(
@@ -30,12 +34,18 @@ use_case = LogoComparisonUseCase()
         "and publishes the Stage 2 webhook contract for later external enrichment."
     ),
 )
-def submit_logo_comparison(payload: LogoComparisonRequest) -> LogoComparisonResponse:
-    check_request, result_set, comparison_summary = use_case.execute(
-        to_logo_asset_ref(payload.reference_logo),
-        to_logo_asset_ref(payload.suspicious_logo),
-        payload.mktu_codes,
-    )
+def submit_logo_comparison(
+    payload: LogoComparisonRequest,
+    use_case: Annotated[LogoComparisonUseCase, Depends(get_logo_comparison_use_case)],
+) -> LogoComparisonResponse:
+    try:
+        check_request, result_set, comparison_summary = use_case.execute(
+            to_logo_asset_ref(payload.reference_logo),
+            to_logo_asset_ref(payload.suspicious_logo),
+            payload.mktu_codes,
+        )
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     payload_data = check_request.payload
     if not isinstance(payload_data, LogoComparisonPayload):
         raise TypeError("Unexpected payload type for logo_comparison flow.")
