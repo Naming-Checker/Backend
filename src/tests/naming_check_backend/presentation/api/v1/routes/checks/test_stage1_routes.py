@@ -66,7 +66,9 @@ def test_openapi_exposes_contract_schemas(client: TestClient) -> None:
     document = response.json()
     registration_operation = document["paths"]["/api/v1/registration-check"]["post"]
     webhook_operation = document["paths"]["/api/v1/webhooks/stage2-results"]["post"]
+    similarity_operation = document["paths"]["/api/v1/logo-similarity/search"]["post"]
 
+    assert similarity_operation["summary"] == "Search similar logos from an uploaded image"
     assert registration_operation["summary"] == "Submit registration check"
     assert webhook_operation["responses"]["202"]["content"]["application/json"]["schema"][
         "$ref"

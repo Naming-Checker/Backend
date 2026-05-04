@@ -3,6 +3,9 @@ from fastapi import APIRouter
 from naming_check_backend.presentation.api.v1.routes.checks.logo_comparison import (
     router as logo_router,
 )
+from naming_check_backend.presentation.api.v1.routes.checks.logo_similarity_search import (
+    router as logo_similarity_router,
+)
 from naming_check_backend.presentation.api.v1.routes.checks.registration_check import (
     router as registration_router,
 )
@@ -27,6 +30,11 @@ v1_router.include_router(
     tags=["text-infringement"],
 )
 v1_router.include_router(logo_router, prefix="/logo-comparison", tags=["logo-comparison"])
+v1_router.include_router(
+    logo_similarity_router,
+    prefix="/logo-similarity",
+    tags=["logo-similarity"],
+)
 v1_router.include_router(
     stage2_results_router,
     prefix="/webhooks/stage2-results",

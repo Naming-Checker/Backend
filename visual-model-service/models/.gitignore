@@ -1,0 +1,4 @@
+# Embedding artifacts (~380MB+.pt): copy onto the server, do not commit.
+*
+!.gitignore
+!.gitkeep

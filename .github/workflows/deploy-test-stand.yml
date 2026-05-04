@@ -1,6 +1,7 @@
 name: Deploy Test Stand
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -17,6 +18,8 @@ env:
   REMOTE_APP_DIR: ${{ secrets.TEST_STAND_APP_DIR != '' && secrets.TEST_STAND_APP_DIR || '/opt/naming-check-backend' }}
   REMOTE_PORT: ${{ secrets.TEST_STAND_PORT != '' && secrets.TEST_STAND_PORT || '22' }}
   HOST_BIND_PORT: ${{ secrets.TEST_STAND_BIND_PORT != '' && secrets.TEST_STAND_BIND_PORT || '8000' }}
+  VISUAL_MODELS_HOST_DIR: ${{ secrets.TEST_STAND_VISUAL_MODELS_DIR != '' && secrets.TEST_STAND_VISUAL_MODELS_DIR || '/opt/visual-model-models' }}
+  VISUAL_HOST_BIND_PORT: ${{ secrets.TEST_STAND_VISUAL_BIND_PORT != '' && secrets.TEST_STAND_VISUAL_BIND_PORT || '9000' }}
 
 jobs:
   pre-deploy-checks:
@@ -68,7 +71,9 @@ jobs:
 
       - name: Sync backend source to test stand
         run: |
-          ssh -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+          RSYNC_RSH="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -p ${REMOTE_PORT}"
+          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "mkdir -p '$REMOTE_APP_DIR'"
           rsync -az --delete \
             --exclude '.git' \
@@ -77,38 +82,92 @@ jobs:
             --exclude '.mypy_cache' \
             --exclude '.pytest_cache' \
             --exclude '.ruff_cache' \
+            --exclude '*.pt' \
+            --exclude '.env' \
+            -e "$RSYNC_RSH" \
             ./ "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}:$REMOTE_APP_DIR/"
 
-      - name: Write runtime env file on test stand
+      - name: Ensure visual models directory exists on server
+        run: |
+          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "mkdir -p '$VISUAL_MODELS_HOST_DIR'"
+
+      - name: Write runtime env file on test stand (backend)
         env:
           TEST_STAND_ENV_FILE: ${{ secrets.TEST_STAND_ENV_FILE }}
         run: |
-          cat <<EOF | ssh -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+          cat <<EOF | ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "cat > '$REMOTE_APP_DIR/.env.runtime'"
           APP_NAME=Backend Service
           APP_ENV=production
           APP_HOST=0.0.0.0
           APP_PORT=8000
+          VISUAL_MODEL_SERVICE_BASE_URL=http://visual-model-service:9000
           $TEST_STAND_ENV_FILE
           EOF
 
-      - name: Build and restart backend container
+      - name: Write runtime env file on test stand (visual model)
+        env:
+          TEST_STAND_VISUAL_ENV_FILE: ${{ secrets.TEST_STAND_VISUAL_ENV_FILE }}
         run: |
-          ssh -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
-            "set -e
+          cat <<EOF | ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "cat > '$REMOTE_APP_DIR/visual-model-service/.env.runtime'"
+          LOG_LEVEL=INFO
+          APP_HOST=0.0.0.0
+          APP_PORT=9000
+          EMBEDDINGS_PT_PATH=/app/models/logos_embedding.pt
+          EMBEDDINGS_CSV_PATH=/app/models/logos_embedding.csv
+          $TEST_STAND_VISUAL_ENV_FILE
+          EOF
+
+      - name: Build and restart containers (backend + visual)
+        run: |
+          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "set -euo pipefail
             docker build -t naming-check-backend:main '$REMOTE_APP_DIR'
+            docker build -t visual-model-service:main '$REMOTE_APP_DIR/visual-model-service'
+            docker network create naming-check-net 2>/dev/null || true
             docker rm -f naming-check-backend >/dev/null 2>&1 || true
+            docker rm -f visual-model-service >/dev/null 2>&1 || true
+            docker run -d \
+              --name visual-model-service \
+              --network naming-check-net \
+              --restart unless-stopped \
+              --env-file '$REMOTE_APP_DIR/visual-model-service/.env.runtime' \
+              -v '$VISUAL_MODELS_HOST_DIR':/app/models:ro \
+              -p 127.0.0.1:'$VISUAL_HOST_BIND_PORT':9000 \
+              visual-model-service:main
             docker run -d \
               --name naming-check-backend \
+              --network naming-check-net \
               --restart unless-stopped \
               --env-file '$REMOTE_APP_DIR/.env.runtime' \
               -p '$HOST_BIND_PORT:8000' \
               naming-check-backend:main"
 
-      - name: Verify deployed container
+      - name: Verify deployed containers
         run: |
-          ssh -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
-            "set -e
-            sleep 3
-            docker ps --filter name=naming-check-backend --format '{{.Names}} {{.Status}}'
-            docker exec naming-check-backend python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health').read()\" >/dev/null"
+          set -euo pipefail
+          SSH=(ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}")
+          "${SSH[@]}" "set -euo pipefail
+          sleep 5
+          docker ps --filter name=naming-check-backend
+          docker ps --filter name=visual-model-service
+          docker exec naming-check-backend python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health').read()\" >/dev/null"
+          ok_visual=0
+          for _ in $(seq 1 72); do
+            if "${SSH[@]}" "docker exec visual-model-service python -c \"import json, urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:9000/health')); raise SystemExit(0 if d.get('status')=='ok' else 1)\""; then
+              ok_visual=1
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$ok_visual" != 1 ]]; then
+            "${SSH[@]}" "docker logs visual-model-service --tail 200" >&2 || true
+            exit 1
+          fi
