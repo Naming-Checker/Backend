@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import tempfile
@@ -18,24 +19,40 @@ logger = logging.getLogger(__name__)
 _engine: SimilarityEngine | None = None
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    global _engine
+def _sync_load_engine() -> SimilarityEngine | None:
+    """Blocking load; run via asyncio.to_thread so Uvicorn binds and /health responds while loading."""
     try:
-        _engine = SimilarityEngine(
+        eng = SimilarityEngine(
             embeddings_pt_path=settings.embeddings_pt_path,
             embeddings_csv_path=settings.embeddings_csv_path,
         )
         logger.info("Similarity engine ready.")
+        return eng
     except FileNotFoundError as exc:
         logger.warning("Similarity engine not loaded: %s", exc)
-        _engine = None
+        return None
     except Exception:
         logger.exception("Failed to initialize similarity engine")
-        _engine = None
+        return None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global _engine
+
+    async def load_task() -> None:
+        global _engine
+        _engine = await asyncio.to_thread(_sync_load_engine)
+
+    task = asyncio.create_task(load_task())
     try:
         yield
     finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
         _engine = None
 
 

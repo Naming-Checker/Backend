@@ -239,22 +239,38 @@ jobs:
       - name: Verify deployed containers
         run: |
           set -euo pipefail
-          SSH=(ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
-            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}")
-          "${SSH[@]}" "set -euo pipefail
-          sleep 5
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            bash -s <<'VERIFY'
+          set -euo pipefail
+          sleep 8
           docker ps --filter name=naming-check-backend
           docker ps --filter name=visual-model-service
-          docker exec naming-check-backend python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health').read()\" >/dev/null"
-          ok_visual=0
+
+          ok_backend=0
           for _ in $(seq 1 72); do
-            if "${SSH[@]}" "docker exec visual-model-service python -c \"import json, urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:9000/health')); raise SystemExit(0 if d.get('status')=='ok' else 1)\""; then
+            if docker exec naming-check-backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=10).read()" >/dev/null 2>&1; then
+              ok_backend=1
+              break
+            fi
+            sleep 5
+          done
+          if [[ "${ok_backend}" != 1 ]]; then
+            docker logs naming-check-backend --tail 200 >&2 || true
+            exit 1
+          fi
+
+          # Wait for embeddings + VGG to finish loading (can be several minutes on small VPS).
+          ok_visual=0
+          for _ in $(seq 1 120); do
+            if docker exec visual-model-service python -c "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=10); d=json.loads(r.read().decode()); raise SystemExit(0 if d.get('status')=='ok' else 1)" >/dev/null 2>&1; then
               ok_visual=1
               break
             fi
             sleep 5
           done
-          if [[ "$ok_visual" != 1 ]]; then
-            "${SSH[@]}" "docker logs visual-model-service --tail 200" >&2 || true
+          if [[ "${ok_visual}" != 1 ]]; then
+            docker logs visual-model-service --tail 300 >&2 || true
             exit 1
           fi
+          VERIFY
