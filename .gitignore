@@ -8,3 +8,7 @@ __pycache__/
 htmlcov/
 .env
 .torch_home/
+
+
+test-stand-deploy
+test-stand-deploy.pub
