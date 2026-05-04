@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: deploy-test-stand-${{ github.ref }}
@@ -47,10 +48,54 @@ jobs:
       - name: Run CI checks before deploy
         run: make ci
 
+  # Build heavy images (PyTorch) on the runner — tiny VPS disks cannot finish `docker build` locally.
+  build-and-push-images:
+    name: build-and-push-images
+    runs-on: ubuntu-latest
+    needs: pre-deploy-checks
+    outputs:
+      registry_prefix: ${{ steps.meta.outputs.prefix }}
+      image_tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Image names (GHCR, lowercase)
+        id: meta
+        run: |
+          set -euo pipefail
+          repo_lc="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "prefix=ghcr.io/${repo_lc}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        run: |
+          set -euo pipefail
+          prefix="${{ steps.meta.outputs.prefix }}"
+          tag="${{ steps.meta.outputs.tag }}"
+          docker build -t "${prefix}/naming-check-backend:${tag}" .
+          docker push "${prefix}/naming-check-backend:${tag}"
+
+      - name: Build and push visual-model-service image
+        run: |
+          set -euo pipefail
+          prefix="${{ steps.meta.outputs.prefix }}"
+          tag="${{ steps.meta.outputs.tag }}"
+          docker build -t "${prefix}/visual-model-service:${tag}" ./visual-model-service
+          docker push "${prefix}/visual-model-service:${tag}"
+
   deploy:
     name: deploy-test-stand
     runs-on: ubuntu-latest
-    needs: pre-deploy-checks
+    needs: build-and-push-images
     environment: test-stand
 
     env:
@@ -144,31 +189,52 @@ jobs:
           $TEST_STAND_VISUAL_ENV_FILE
           EOF
 
-      - name: Build and restart containers (backend + visual)
+      - name: Pull and restart containers (images from GHCR)
         run: |
+          set -euo pipefail
+          PREFIX="${{ needs.build-and-push-images.outputs.registry_prefix }}"
+          TAG="${{ needs.build-and-push-images.outputs.image_tag }}"
+          export GHCR_PULL_TOKEN="${{ secrets.GHCR_PULL_TOKEN }}"
+          export GHCR_PULL_USER="${{ secrets.GHCR_PULL_USER }}"
           ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
-            "set -euo pipefail
-            docker build -t naming-check-backend:main '$REMOTE_APP_DIR'
-            docker build -t visual-model-service:main '$REMOTE_APP_DIR/visual-model-service'
-            docker network create naming-check-net 2>/dev/null || true
-            docker rm -f naming-check-backend >/dev/null 2>&1 || true
-            docker rm -f visual-model-service >/dev/null 2>&1 || true
-            docker run -d \
-              --name visual-model-service \
-              --network naming-check-net \
-              --restart unless-stopped \
-              --env-file '$REMOTE_APP_DIR/visual-model-service/.env.runtime' \
-              -v '$VISUAL_MODELS_HOST_DIR':/app/models:ro \
-              -p 127.0.0.1:'$VISUAL_HOST_BIND_PORT':9000 \
-              visual-model-service:main
-            docker run -d \
-              --name naming-check-backend \
-              --network naming-check-net \
-              --restart unless-stopped \
-              --env-file '$REMOTE_APP_DIR/.env.runtime' \
-              -p '$HOST_BIND_PORT:8000' \
-              naming-check-backend:main"
+            env \
+              PREFIX="$PREFIX" \
+              TAG="$TAG" \
+              REMOTE_APP_DIR="$REMOTE_APP_DIR" \
+              VISUAL_MODELS_HOST_DIR="$VISUAL_MODELS_HOST_DIR" \
+              HOST_BIND_PORT="$HOST_BIND_PORT" \
+              VISUAL_HOST_BIND_PORT="$VISUAL_HOST_BIND_PORT" \
+              GHCR_PULL_TOKEN="$GHCR_PULL_TOKEN" \
+              GHCR_PULL_USER="$GHCR_PULL_USER" \
+            bash -s <<'EOS'
+          set -euo pipefail
+          if [ -n "${GHCR_PULL_TOKEN:-}" ] && [ -n "${GHCR_PULL_USER:-}" ]; then
+            printf '%s\n' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_PULL_USER" --password-stdin
+          fi
+          docker pull "${PREFIX}/naming-check-backend:${TAG}"
+          docker pull "${PREFIX}/visual-model-service:${TAG}"
+          docker network create naming-check-net 2>/dev/null || true
+          docker rm -f naming-check-backend >/dev/null 2>&1 || true
+          docker rm -f visual-model-service >/dev/null 2>&1 || true
+          docker run -d \
+            --name visual-model-service \
+            --network naming-check-net \
+            --restart unless-stopped \
+            --env-file "${REMOTE_APP_DIR}/visual-model-service/.env.runtime" \
+            -v "${VISUAL_MODELS_HOST_DIR}:/app/models:ro" \
+            -p "127.0.0.1:${VISUAL_HOST_BIND_PORT}:9000" \
+            "${PREFIX}/visual-model-service:${TAG}"
+          docker run -d \
+            --name naming-check-backend \
+            --network naming-check-net \
+            --restart unless-stopped \
+            --env-file "${REMOTE_APP_DIR}/.env.runtime" \
+            -p "${HOST_BIND_PORT}:8000" \
+            "${PREFIX}/naming-check-backend:${TAG}"
+          docker image prune -f --filter until=24h >/dev/null 2>&1 || true
+          EOS
+
 
       - name: Verify deployed containers
         run: |
