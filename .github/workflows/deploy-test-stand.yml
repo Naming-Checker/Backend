@@ -53,6 +53,13 @@ jobs:
     needs: pre-deploy-checks
     environment: test-stand
 
+    env:
+      # Prevent long idle SSH sessions from dropping mid `docker build` (Broken pipe / exit 255).
+      GHA_SSH_OPTS: >-
+        -o ServerAliveInterval=30
+        -o ServerAliveCountMax=480
+        -o TCPKeepAlive=yes
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -85,8 +92,8 @@ jobs:
 
       - name: Sync backend source to test stand
         run: |
-          RSYNC_RSH="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -p ${REMOTE_PORT}"
-          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+          RSYNC_RSH="ssh ${{ env.GHA_SSH_OPTS }} -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -p ${REMOTE_PORT}"
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "mkdir -p '$REMOTE_APP_DIR'"
           rsync -az --delete \
@@ -103,7 +110,7 @@ jobs:
 
       - name: Ensure visual models directory exists on server
         run: |
-          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "mkdir -p '$VISUAL_MODELS_HOST_DIR'"
 
@@ -111,7 +118,7 @@ jobs:
         env:
           TEST_STAND_ENV_FILE: ${{ secrets.TEST_STAND_ENV_FILE }}
         run: |
-          cat <<EOF | ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+          cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "cat > '$REMOTE_APP_DIR/.env.runtime'"
           APP_NAME=Backend Service
@@ -126,7 +133,7 @@ jobs:
         env:
           TEST_STAND_VISUAL_ENV_FILE: ${{ secrets.TEST_STAND_VISUAL_ENV_FILE }}
         run: |
-          cat <<EOF | ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+          cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "cat > '$REMOTE_APP_DIR/visual-model-service/.env.runtime'"
           LOG_LEVEL=INFO
@@ -139,7 +146,7 @@ jobs:
 
       - name: Build and restart containers (backend + visual)
         run: |
-          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "set -euo pipefail
             docker build -t naming-check-backend:main '$REMOTE_APP_DIR'
@@ -166,7 +173,7 @@ jobs:
       - name: Verify deployed containers
         run: |
           set -euo pipefail
-          SSH=(ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+          SSH=(ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}")
           "${SSH[@]}" "set -euo pipefail
           sleep 5
