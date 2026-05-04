@@ -57,6 +57,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Require deploy secrets
+        env:
+          TEST_STAND_HOST: ${{ secrets.TEST_STAND_HOST }}
+          TEST_STAND_SSH_KEY: ${{ secrets.TEST_STAND_SSH_KEY }}
+          TEST_STAND_USER: ${{ secrets.TEST_STAND_USER }}
+        run: |
+          missing=
+          [ -z "$TEST_STAND_HOST" ] && { echo "::error::TEST_STAND_HOST is empty or unset. Add it under Settings → Secrets → Actions (or Environment \`test-stand\` → environment secrets)."; missing=1; }
+          [ -z "$TEST_STAND_SSH_KEY" ] && { echo "::error::TEST_STAND_SSH_KEY is empty or unset."; missing=1; }
+          [ -z "$TEST_STAND_USER" ] && { echo "::error::TEST_STAND_USER is empty or unset."; missing=1; }
+          exit "${missing:-0}"
+
       - name: Configure SSH key
         env:
           TEST_STAND_SSH_KEY: ${{ secrets.TEST_STAND_SSH_KEY }}
@@ -67,7 +79,9 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
 
       - name: Trust test stand host key
-        run: ssh-keyscan -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_HOST }}" >> ~/.ssh/known_hosts
+        env:
+          TEST_STAND_HOST: ${{ secrets.TEST_STAND_HOST }}
+        run: ssh-keyscan -p "$REMOTE_PORT" "$TEST_STAND_HOST" >> ~/.ssh/known_hosts
 
       - name: Sync backend source to test stand
         run: |
