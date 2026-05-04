@@ -382,3 +382,29 @@ class Stage2WebhookResponse(BaseModel):
             }
         }
     )
+
+
+class LogoSimilarityMatch(BaseModel):
+    logo_path: str
+    cosine_similarity: float = Field(..., ge=-1.0, le=1.0)
+    similarity_percent: float
+
+
+class LogoSimilaritySearchResponse(BaseModel):
+    top_k: int = Field(ge=1)
+    matches: list[LogoSimilarityMatch]
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "top_k": 3,
+                "matches": [
+                    {
+                        "logo_path": "data/logos/1001179.jpg",
+                        "cosine_similarity": 1.0,
+                        "similarity_percent": 100.0,
+                    }
+                ],
+            }
+        }
+    )

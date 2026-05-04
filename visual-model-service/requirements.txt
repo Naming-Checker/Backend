@@ -1,0 +1,7 @@
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+python-multipart>=0.0.18,<1.0.0
+pydantic-settings>=2.4.0,<3.0.0
+numpy>=1.26.0,<3.0.0
+pandas>=2.1.0,<3.0.0
+# PyTorch CPU wheels installed in Dockerfile (smaller image, explicit index).
