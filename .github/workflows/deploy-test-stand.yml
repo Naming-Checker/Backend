@@ -212,8 +212,26 @@ jobs:
           if [ -n "${GHCR_PULL_TOKEN:-}" ] && [ -n "${GHCR_PULL_USER:-}" ]; then
             printf '%s\n' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_PULL_USER" --password-stdin
           fi
-          docker pull "${PREFIX}/naming-check-backend:${TAG}"
-          docker pull "${PREFIX}/visual-model-service:${TAG}"
+          pull_with_retry() {
+            image="$1"
+            attempts="${2:-6}"
+            delay="${3:-10}"
+            i=1
+            while [ "$i" -le "$attempts" ]; do
+              if docker pull "$image"; then
+                return 0
+              fi
+              if [ "$i" -eq "$attempts" ]; then
+                echo "::error::Failed to pull $image after $attempts attempts." >&2
+                return 1
+              fi
+              echo "Pull failed for $image (attempt $i/$attempts). Retrying in ${delay}s..." >&2
+              sleep "$delay"
+              i=$((i + 1))
+            done
+          }
+          pull_with_retry "${PREFIX}/naming-check-backend:${TAG}" 6 15
+          pull_with_retry "${PREFIX}/visual-model-service:${TAG}" 6 15
           docker network create naming-check-net 2>/dev/null || true
           docker rm -f naming-check-backend >/dev/null 2>&1 || true
           docker rm -f visual-model-service >/dev/null 2>&1 || true
