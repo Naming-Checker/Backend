@@ -67,8 +67,10 @@ def test_openapi_exposes_contract_schemas(client: TestClient) -> None:
     registration_operation = document["paths"]["/api/v1/registration-check"]["post"]
     webhook_operation = document["paths"]["/api/v1/webhooks/stage2-results"]["post"]
     similarity_operation = document["paths"]["/api/v1/logo-similarity/search"]["post"]
+    text_similarity_operation = document["paths"]["/api/v1/text-similarity/search"]["post"]
 
     assert similarity_operation["summary"] == "Search similar logos from an uploaded image"
+    assert text_similarity_operation["summary"] == "Search similar trademark names by text"
     assert registration_operation["summary"] == "Submit registration check"
     assert webhook_operation["responses"]["202"]["content"]["application/json"]["schema"][
         "$ref"
