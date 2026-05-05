@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     text_model_service_base_url: str = "http://127.0.0.1:9100"
     text_model_service_timeout_seconds: float = 120.0
     text_model_service_max_top_k: int = 200
-    # Defaults allow local manual testing UI (browser origin != API host). Override or clear via env on stricter setups.
+    # Defaults allow local manual UI (browser origin != API host). Override or clear via env.
     cors_allow_origins: str = (
         "http://127.0.0.1:5173,http://localhost:5173,"
         "http://127.0.0.1:8080,http://localhost:8080,"
