@@ -16,6 +16,19 @@ from torchvision.transforms import v2 as T
 logger = logging.getLogger(__name__)
 
 
+def _to_three_channel_chw(img: torch.Tensor) -> torch.Tensor:
+    """Torchvision read_image can return 1 (L) or 4 (RGBA); VGG16 expects 3×H×W."""
+    c = int(img.shape[0])
+    if c == 3:
+        return img
+    if c == 4:
+        return img[:3, ...].contiguous()
+    if c == 1:
+        return img.repeat(3, 1, 1)
+    msg = f"Expected 1, 3, or 4 image channels, got {c}"
+    raise ValueError(msg)
+
+
 class SquarePad:
     def __call__(self, image: torch.Tensor) -> torch.Tensor:
         c, h, w = image.size()
@@ -87,7 +100,8 @@ class SimilarityEngine:
         return self._encode_tensor(img)
 
     def _encode_tensor(self, image_chw: torch.Tensor) -> torch.Tensor:
-        x = self._transform(image_chw).unsqueeze(0).to(self._device)
+        rgb = _to_three_channel_chw(image_chw)
+        x = self._transform(rgb).unsqueeze(0).to(self._device)
         with torch.inference_mode():
             out = self._model(x).detach()
         return F_nn.normalize(out, p=2, dim=1)

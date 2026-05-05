@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     embeddings_csv_path: str = "/app/models/logos_embedding.csv"
 
     default_top_k: int = 10
-    max_top_k: int = 50
+    max_top_k: int = 200
 
     model_config = SettingsConfigDict(
         env_file=".env",

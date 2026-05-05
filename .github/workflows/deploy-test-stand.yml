@@ -97,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push-images
     environment: test-stand
+    # Caps rare hangs (SSH/docker exec stuck); pulls + verify should finish well under this.
+    timeout-minutes: 45
 
     env:
       # Prevent long idle SSH sessions from dropping mid `docker build` (Broken pipe / exit 255).
@@ -232,6 +234,7 @@ jobs:
           }
           pull_with_retry "${PREFIX}/naming-check-backend:${TAG}" 6 15
           pull_with_retry "${PREFIX}/visual-model-service:${TAG}" 6 15
+          echo "Pull complete. Starting containers..."
           docker network create naming-check-net 2>/dev/null || true
           docker rm -f naming-check-backend >/dev/null 2>&1 || true
           docker rm -f visual-model-service >/dev/null 2>&1 || true
@@ -250,6 +253,7 @@ jobs:
             --env-file "${REMOTE_APP_DIR}/.env.runtime" \
             -p "${HOST_BIND_PORT}:8000" \
             "${PREFIX}/naming-check-backend:${TAG}"
+          echo "Containers started."
           docker image prune -f --filter until=24h >/dev/null 2>&1 || true
           EOS
 
@@ -266,10 +270,17 @@ jobs:
           docker ps --filter name=visual-model-service
 
           ok_backend=0
+          attempt=0
           for _ in $(seq 1 72); do
-            if docker exec naming-check-backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=10).read()" >/dev/null 2>&1; then
+            attempt=$((attempt + 1))
+            # timeout(1) avoids a stuck docker exec blocking the whole GitHub job.
+            if timeout 40 docker exec naming-check-backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=10).read()" >/dev/null 2>&1; then
               ok_backend=1
+              echo "Backend health OK (attempt ${attempt})."
               break
+            fi
+            if [[ $((attempt % 6)) -eq 0 ]]; then
+              echo "[verify] still waiting for backend HTTP on :8000 (${attempt}/72, ~$((attempt * 5))s)..."
             fi
             sleep 5
           done
@@ -280,14 +291,26 @@ jobs:
 
           # Wait for embeddings + VGG to finish loading (can be several minutes on small VPS).
           ok_visual=0
+          attempt=0
           for _ in $(seq 1 120); do
-            if docker exec visual-model-service python -c "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=10); d=json.loads(r.read().decode()); raise SystemExit(0 if d.get('status')=='ok' else 1)" >/dev/null 2>&1; then
+            attempt=$((attempt + 1))
+            if timeout 40 docker exec visual-model-service python -c "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=10); d=json.loads(r.read().decode()); raise SystemExit(0 if d.get('status')=='ok' else 1)" >/dev/null 2>&1; then
               ok_visual=1
+              echo "Visual health OK (attempt ${attempt}, status ok)."
               break
+            else
+              te=$?
+              if [[ "${te}" -eq 124 ]]; then
+                echo "[verify] docker exec or health check hit 40s wall-clock limit (attempt ${attempt}). Check docker / container CPU." >&2
+              fi
+            fi
+            if [[ $((attempt % 6)) -eq 0 ]]; then
+              echo "[verify] waiting for visual /health status=ok (embeddings+VGG warm-up) (${attempt}/120, ~$((attempt * 5))s max)..."
             fi
             sleep 5
           done
           if [[ "${ok_visual}" != 1 ]]; then
+            echo "::error::Visual did not reach health status=ok within ~10m. Often: wrong/missing mount for logos_embedding.pt + .csv, OOM, or disk I/O. See logs below." >&2
             docker logs visual-model-service --tail 300 >&2 || true
             exit 1
           fi
