@@ -31,49 +31,6 @@ python src/manage.py run-server
 make test
 ```
 
-## Logo Comparison MVP (VisualModel, in-process)
-
-В `logo_comparison` доступен MVP-режим in-process интеграции с `VisualModel`.
-
-Включение через `.env`:
-
-```bash
-VISUALMODEL_ENABLED=true
-VISUALMODEL_SIMILARITY_MODULE_PATH=../VisualModel/src/similarity.py
-VISUALMODEL_EMBEDDINGS_PATH=../VisualModel/models/logos_embedding.pt
-VISUALMODEL_ASSETS_ROOT=../VisualModel/data/logos
-VISUALMODEL_TOP_K=10
-VISUALMODEL_SCORE_THRESHOLD=0
-VISUALMODEL_SOURCE=visual_model
-```
-
-Smoke-запрос:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/api/v1/logo-comparison" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "reference_logo": {
-      "asset_ref": "file:///absolute/path/to/query-logo.png",
-      "media_type": "image/png",
-      "filename": "query-logo.png"
-    },
-    "suspicious_logo": {
-      "asset_ref": "logo://suspicious/probi-market.png",
-      "media_type": "image/png",
-      "filename": "probi-market.png"
-    },
-    "mktu_codes": [35]
-  }'
-```
-
-Примечания:
-
-- Для MVP `asset_ref` поддерживает `file://...`, `logo://...` и обычный путь.
-- Если `VISUALMODEL_ENABLED=false`, endpoint работает в режиме placeholder-ответа.
-- Для рабочего VisualModel-режима должны быть доступны `torch/torchvision` и файлы embeddings.
-- Этот режим относится только к in-process интеграции для `logo_comparison`. На тестовом стенде similarity-поиск по логотипам и тексту выполняется через отдельные sidecar-контейнеры `visual-model-service` и `text-model-service`.
-
 ## Text similarity (TextModel + sidecar)
 
 Исходники пайплайна (офлайн, без вызовов HF из рантайма контейнера при `local_files_only`) лежат в каталоге **`TextModel/`** в монорепе: см. [`TextModel/src/README.md`](../TextModel/src/README.md) — установка зависимостей, скачивание snapshot **`cointegrated/rubert-tiny2`** в `TextModel/models/rubert-tiny2`, сборка индекса:
@@ -98,13 +55,12 @@ curl -X POST "http://127.0.0.1:8000/api/v1/text-similarity/search" \
   -d '{"query":"EUROPLEX","mktu_codes":[5,35],"top_k":10}'
 ```
 
-`/api/v1/text-infringement` по-прежнему относится к Stage 1 контракту и **не** использует этот sidecar напрямую.
-
 ## Sidecar-поиск на стенде (logo + text)
 
 Публичные прокси-ручки backend:
 
 - `POST /api/v1/logo-similarity/search` -> `visual-model-service`
+- `GET /api/v1/logo-similarity/preview` -> `visual-model-service` (прокси выдачи preview по `logo_path`)
 - `POST /api/v1/text-similarity/search` -> `text-model-service`
 
 Полезные переменные для локальной отладки backend sidecar-вызовов (см. `src/naming_check_backend/shared/settings.py`):
