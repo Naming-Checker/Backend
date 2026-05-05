@@ -23,6 +23,9 @@ from naming_check_backend.presentation.schemas.contracts import (
     Stage2WebhookResponse,
     TextInfringementRequest,
     TextInfringementResponse,
+    TextSimilarityMatch,
+    TextSimilaritySearchRequest,
+    TextSimilaritySearchResponse,
 )
 
 __all__ = [
@@ -48,4 +51,7 @@ __all__ = [
     "Stage2WebhookResponse",
     "TextInfringementRequest",
     "TextInfringementResponse",
+    "TextSimilarityMatch",
+    "TextSimilaritySearchRequest",
+    "TextSimilaritySearchResponse",
 ]

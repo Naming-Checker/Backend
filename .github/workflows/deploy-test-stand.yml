@@ -21,6 +21,8 @@ env:
   HOST_BIND_PORT: ${{ secrets.TEST_STAND_BIND_PORT != '' && secrets.TEST_STAND_BIND_PORT || '8000' }}
   VISUAL_MODELS_HOST_DIR: ${{ secrets.TEST_STAND_VISUAL_MODELS_DIR != '' && secrets.TEST_STAND_VISUAL_MODELS_DIR || '/opt/visual-model-models' }}
   VISUAL_HOST_BIND_PORT: ${{ secrets.TEST_STAND_VISUAL_BIND_PORT != '' && secrets.TEST_STAND_VISUAL_BIND_PORT || '9000' }}
+  TEXT_MODELS_HOST_DIR: ${{ secrets.TEST_STAND_TEXT_MODELS_DIR != '' && secrets.TEST_STAND_TEXT_MODELS_DIR || '/opt/text-model-models' }}
+  TEXT_HOST_BIND_PORT: ${{ secrets.TEST_STAND_TEXT_BIND_PORT != '' && secrets.TEST_STAND_TEXT_BIND_PORT || '9100' }}
 
 jobs:
   pre-deploy-checks:
@@ -92,6 +94,14 @@ jobs:
           docker build -t "${prefix}/visual-model-service:${tag}" ./visual-model-service
           docker push "${prefix}/visual-model-service:${tag}"
 
+      - name: Build and push text-model-service image
+        run: |
+          set -euo pipefail
+          prefix="${{ steps.meta.outputs.prefix }}"
+          tag="${{ steps.meta.outputs.tag }}"
+          docker build -t "${prefix}/text-model-service:${tag}" ./text-model-service
+          docker push "${prefix}/text-model-service:${tag}"
+
   deploy:
     name: deploy-test-stand
     runs-on: ubuntu-latest
@@ -161,6 +171,12 @@ jobs:
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "mkdir -p '$VISUAL_MODELS_HOST_DIR'"
 
+      - name: Ensure text models directory exists on server
+        run: |
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "mkdir -p '$TEXT_MODELS_HOST_DIR'"
+
       - name: Write runtime env file on test stand (backend)
         env:
           TEST_STAND_ENV_FILE: ${{ secrets.TEST_STAND_ENV_FILE }}
@@ -173,6 +189,7 @@ jobs:
           APP_HOST=0.0.0.0
           APP_PORT=8000
           VISUAL_MODEL_SERVICE_BASE_URL=http://visual-model-service:9000
+          TEXT_MODEL_SERVICE_BASE_URL=http://text-model-service:9000
           $TEST_STAND_ENV_FILE
           EOF
 
@@ -191,6 +208,22 @@ jobs:
           $TEST_STAND_VISUAL_ENV_FILE
           EOF
 
+      - name: Write runtime env file on test stand (text model)
+        env:
+          TEST_STAND_TEXT_ENV_FILE: ${{ secrets.TEST_STAND_TEXT_ENV_FILE }}
+        run: |
+          cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "cat > '$REMOTE_APP_DIR/text-model-service/.env.runtime'"
+          LOG_LEVEL=INFO
+          APP_HOST=0.0.0.0
+          APP_PORT=9000
+          EMBEDDINGS_PT_PATH=/app/models/text_embedding.pt
+          EMBEDDINGS_CSV_PATH=/app/models/text_embedding.csv
+          MODEL_PATH=/app/models/rubert-tiny2
+          $TEST_STAND_TEXT_ENV_FILE
+          EOF
+
       - name: Pull and restart containers (images from GHCR)
         run: |
           set -euo pipefail
@@ -205,8 +238,10 @@ jobs:
               TAG="$TAG" \
               REMOTE_APP_DIR="$REMOTE_APP_DIR" \
               VISUAL_MODELS_HOST_DIR="$VISUAL_MODELS_HOST_DIR" \
+              TEXT_MODELS_HOST_DIR="$TEXT_MODELS_HOST_DIR" \
               HOST_BIND_PORT="$HOST_BIND_PORT" \
               VISUAL_HOST_BIND_PORT="$VISUAL_HOST_BIND_PORT" \
+              TEXT_HOST_BIND_PORT="$TEXT_HOST_BIND_PORT" \
               GHCR_PULL_TOKEN="$GHCR_PULL_TOKEN" \
               GHCR_PULL_USER="$GHCR_PULL_USER" \
             bash -s <<'EOS'
@@ -234,10 +269,12 @@ jobs:
           }
           pull_with_retry "${PREFIX}/naming-check-backend:${TAG}" 6 15
           pull_with_retry "${PREFIX}/visual-model-service:${TAG}" 6 15
+          pull_with_retry "${PREFIX}/text-model-service:${TAG}" 6 15
           echo "Pull complete. Starting containers..."
           docker network create naming-check-net 2>/dev/null || true
           docker rm -f naming-check-backend >/dev/null 2>&1 || true
           docker rm -f visual-model-service >/dev/null 2>&1 || true
+          docker rm -f text-model-service >/dev/null 2>&1 || true
           docker run -d \
             --name visual-model-service \
             --network naming-check-net \
@@ -246,6 +283,14 @@ jobs:
             -v "${VISUAL_MODELS_HOST_DIR}:/app/models:ro" \
             -p "127.0.0.1:${VISUAL_HOST_BIND_PORT}:9000" \
             "${PREFIX}/visual-model-service:${TAG}"
+          docker run -d \
+            --name text-model-service \
+            --network naming-check-net \
+            --restart unless-stopped \
+            --env-file "${REMOTE_APP_DIR}/text-model-service/.env.runtime" \
+            -v "${TEXT_MODELS_HOST_DIR}:/app/models:ro" \
+            -p "127.0.0.1:${TEXT_HOST_BIND_PORT}:9000" \
+            "${PREFIX}/text-model-service:${TAG}"
           docker run -d \
             --name naming-check-backend \
             --network naming-check-net \
@@ -268,6 +313,7 @@ jobs:
           sleep 8
           docker ps --filter name=naming-check-backend
           docker ps --filter name=visual-model-service
+          docker ps --filter name=text-model-service
 
           ok_backend=0
           attempt=0
@@ -312,6 +358,31 @@ jobs:
           if [[ "${ok_visual}" != 1 ]]; then
             echo "::error::Visual did not reach health status=ok within ~10m. Often: wrong/missing mount for logos_embedding.pt + .csv, OOM, or disk I/O. See logs below." >&2
             docker logs visual-model-service --tail 300 >&2 || true
+            exit 1
+          fi
+
+          ok_text=0
+          attempt=0
+          for _ in $(seq 1 120); do
+            attempt=$((attempt + 1))
+            if timeout 40 docker exec text-model-service python -c "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=10); d=json.loads(r.read().decode()); raise SystemExit(0 if d.get('status')=='ok' else 1)" >/dev/null 2>&1; then
+              ok_text=1
+              echo "Text health OK (attempt ${attempt}, status ok)."
+              break
+            else
+              te=$?
+              if [[ "${te}" -eq 124 ]]; then
+                echo "[verify] text-model-service health check hit 40s wall-clock limit (attempt ${attempt})." >&2
+              fi
+            fi
+            if [[ $((attempt % 6)) -eq 0 ]]; then
+              echo "[verify] waiting for text /health status=ok (model+embeddings warm-up) (${attempt}/120, ~$((attempt * 5))s max)..."
+            fi
+            sleep 5
+          done
+          if [[ "${ok_text}" != 1 ]]; then
+            echo "::error::Text model did not reach health status=ok within ~10m. Often: missing text_embedding.pt/.csv, missing rubert-tiny2 snapshot, or OOM." >&2
+            docker logs text-model-service --tail 300 >&2 || true
             exit 1
           fi
           VERIFY

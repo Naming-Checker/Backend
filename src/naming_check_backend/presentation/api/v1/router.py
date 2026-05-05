@@ -12,6 +12,9 @@ from naming_check_backend.presentation.api.v1.routes.checks.registration_check i
 from naming_check_backend.presentation.api.v1.routes.checks.text_infringement import (
     router as text_infringement_router,
 )
+from naming_check_backend.presentation.api.v1.routes.checks.text_similarity_search import (
+    router as text_similarity_router,
+)
 from naming_check_backend.presentation.api.v1.routes.health import router as health_router
 from naming_check_backend.presentation.api.v1.routes.webhooks.stage2_results import (
     router as stage2_results_router,
@@ -34,6 +37,11 @@ v1_router.include_router(
     logo_similarity_router,
     prefix="/logo-similarity",
     tags=["logo-similarity"],
+)
+v1_router.include_router(
+    text_similarity_router,
+    prefix="/text-similarity",
+    tags=["text-similarity"],
 )
 v1_router.include_router(
     stage2_results_router,
