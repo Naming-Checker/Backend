@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     text_model_service_base_url: str = "http://127.0.0.1:9100"
     text_model_service_timeout_seconds: float = 120.0
     text_model_service_max_top_k: int = 200
+    cors_allow_origins: str = ""
+    cors_allow_methods: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    cors_allow_headers: str = "*"
+    cors_allow_credentials: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
