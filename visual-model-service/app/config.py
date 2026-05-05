@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     embeddings_pt_path: str = "/app/models/logos_embedding.pt"
     embeddings_csv_path: str = "/app/models/logos_embedding.csv"
+    assets_root: str = "/app/assets"
 
     default_top_k: int = 10
     max_top_k: int = 200

@@ -20,6 +20,7 @@ env:
   REMOTE_PORT: ${{ secrets.TEST_STAND_PORT != '' && secrets.TEST_STAND_PORT || '22' }}
   HOST_BIND_PORT: ${{ secrets.TEST_STAND_BIND_PORT != '' && secrets.TEST_STAND_BIND_PORT || '8000' }}
   VISUAL_MODELS_HOST_DIR: ${{ secrets.TEST_STAND_VISUAL_MODELS_DIR != '' && secrets.TEST_STAND_VISUAL_MODELS_DIR || '/opt/visual-model-models' }}
+  VISUAL_DATA_HOST_DIR: ${{ secrets.TEST_STAND_VISUAL_DATA_DIR != '' && secrets.TEST_STAND_VISUAL_DATA_DIR || '/opt/visual-model-data' }}
   VISUAL_HOST_BIND_PORT: ${{ secrets.TEST_STAND_VISUAL_BIND_PORT != '' && secrets.TEST_STAND_VISUAL_BIND_PORT || '9000' }}
   TEXT_MODELS_HOST_DIR: ${{ secrets.TEST_STAND_TEXT_MODELS_DIR != '' && secrets.TEST_STAND_TEXT_MODELS_DIR || '/opt/text-model-models' }}
   TEXT_HOST_BIND_PORT: ${{ secrets.TEST_STAND_TEXT_BIND_PORT != '' && secrets.TEST_STAND_TEXT_BIND_PORT || '9100' }}
@@ -171,6 +172,12 @@ jobs:
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "mkdir -p '$VISUAL_MODELS_HOST_DIR'"
 
+      - name: Ensure visual data directory exists on server
+        run: |
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "mkdir -p '$VISUAL_DATA_HOST_DIR/data/logos'"
+
       - name: Ensure text models directory exists on server
         run: |
           ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
@@ -209,6 +216,7 @@ jobs:
           APP_PORT=9000
           EMBEDDINGS_PT_PATH=/app/models/logos_embedding.pt
           EMBEDDINGS_CSV_PATH=/app/models/logos_embedding.csv
+          ASSETS_ROOT=/app/assets
           $TEST_STAND_VISUAL_ENV_FILE
           EOF
 
@@ -242,6 +250,7 @@ jobs:
               TAG="$TAG" \
               REMOTE_APP_DIR="$REMOTE_APP_DIR" \
               VISUAL_MODELS_HOST_DIR="$VISUAL_MODELS_HOST_DIR" \
+              VISUAL_DATA_HOST_DIR="$VISUAL_DATA_HOST_DIR" \
               TEXT_MODELS_HOST_DIR="$TEXT_MODELS_HOST_DIR" \
               HOST_BIND_PORT="$HOST_BIND_PORT" \
               VISUAL_HOST_BIND_PORT="$VISUAL_HOST_BIND_PORT" \
@@ -285,6 +294,7 @@ jobs:
             --restart unless-stopped \
             --env-file "${REMOTE_APP_DIR}/visual-model-service/.env.runtime" \
             -v "${VISUAL_MODELS_HOST_DIR}:/app/models:ro" \
+            -v "${VISUAL_DATA_HOST_DIR}:/app/assets:ro" \
             -p "127.0.0.1:${VISUAL_HOST_BIND_PORT}:9000" \
             "${PREFIX}/visual-model-service:${TAG}"
           docker run -d \

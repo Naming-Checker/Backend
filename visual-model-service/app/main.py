@@ -5,9 +5,11 @@ import logging
 import os
 import tempfile
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -57,6 +59,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Visual model service", version="0.1.0", lifespan=lifespan)
+_assets_root = Path(settings.assets_root).resolve()
 
 
 class HealthResponse(BaseModel):
@@ -85,6 +88,18 @@ def engine_or_503() -> SimilarityEngine:
             ),
         )
     return _engine
+
+
+def resolve_logo_asset_path(logo_path: str) -> Path:
+    normalized = logo_path.strip().replace("\\", "/")
+    if not normalized:
+        raise HTTPException(status_code=400, detail="logo_path is required.")
+    candidate = (_assets_root / normalized).resolve()
+    if not candidate.is_relative_to(_assets_root):
+        raise HTTPException(status_code=400, detail="logo_path points outside assets_root.")
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Logo asset not found.")
+    return candidate
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -131,3 +146,11 @@ def similarity(
                 os.unlink(tmp_path)
             except OSError:
                 logger.warning("Could not delete temp file %s", tmp_path)
+
+
+@app.get("/asset")
+def get_logo_asset(
+    logo_path: Annotated[str, Query(description="Relative path from assets_root, e.g. data/logos/a.jpg")],
+) -> FileResponse:
+    path = resolve_logo_asset_path(logo_path)
+    return FileResponse(path)

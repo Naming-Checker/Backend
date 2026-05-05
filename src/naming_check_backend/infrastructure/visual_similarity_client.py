@@ -68,3 +68,35 @@ async def forward_logo_similarity_search(
         502,
         f"Visual model service error ({response.status_code}): {detail}",
     )
+
+
+async def fetch_logo_preview(
+    *,
+    base_url: str,
+    timeout_seconds: float,
+    logo_path: str,
+) -> tuple[bytes, str]:
+    """GET raw logo bytes from `{base_url}/asset` for preview rendering."""
+    url = f"{base_url.rstrip('/')}/asset"
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            response = await client.get(url, params={"logo_path": logo_path})
+    except httpx.TimeoutException as exc:
+        raise VisualSimilarityUpstreamError(504, "Visual model service request timed out.") from exc
+    except httpx.RequestError as exc:
+        raise VisualSimilarityUpstreamError(
+            502, f"Visual model service unreachable: {exc!s}"
+        ) from exc
+
+    if response.status_code == 200:
+        media_type = response.headers.get("content-type", "application/octet-stream")
+        return response.content, media_type
+
+    if response.status_code in {400, 404}:
+        raise VisualSimilarityUpstreamError(response.status_code, response.text)
+    if response.status_code == 503:
+        raise VisualSimilarityUpstreamError(503, response.text)
+    raise VisualSimilarityUpstreamError(
+        502,
+        f"Visual model service error ({response.status_code}): {response.text}",
+    )
