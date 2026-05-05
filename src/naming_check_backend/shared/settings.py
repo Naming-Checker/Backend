@@ -20,7 +20,13 @@ class Settings(BaseSettings):
     text_model_service_base_url: str = "http://127.0.0.1:9100"
     text_model_service_timeout_seconds: float = 120.0
     text_model_service_max_top_k: int = 200
-    cors_allow_origins: str = ""
+    # Defaults allow local manual testing UI (browser origin != API host). Override or clear via env on stricter setups.
+    cors_allow_origins: str = (
+        "http://127.0.0.1:5173,http://localhost:5173,"
+        "http://127.0.0.1:8080,http://localhost:8080,"
+        "http://127.0.0.1:5500,http://localhost:5500,"
+        "http://127.0.0.1:3000,http://localhost:3000"
+    )
     cors_allow_methods: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     cors_allow_headers: str = "*"
     cors_allow_credentials: bool = False

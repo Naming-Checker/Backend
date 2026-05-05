@@ -118,8 +118,10 @@ TEXT_MODEL_SERVICE_BASE_URL=http://127.0.0.1:9100
 TEXT_MODEL_SERVICE_TIMEOUT_SECONDS=120
 TEXT_MODEL_SERVICE_MAX_TOP_K=200
 
-# Разрешить локальный статический фронтенд в браузере
-CORS_ALLOW_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+# CORS для локального фронта (порт `python -m http.server` и т.п.).
+# По умолчанию в коде уже задан безопасный список origin’ов localhost; переменная переопределяет его полностью.
+# Деплой на тестовый стенд также добавляет те же значения в `.env.runtime` (см. `deploy-test-stand.yml`).
+CORS_ALLOW_ORIGINS=http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8080,http://localhost:8080
 CORS_ALLOW_METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
 CORS_ALLOW_HEADERS=*
 CORS_ALLOW_CREDENTIALS=false
