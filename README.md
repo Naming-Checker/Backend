@@ -31,7 +31,7 @@ python src/manage.py run-server
 make test
 ```
 
-## Logo Comparison MVP (VisualModel)
+## Logo Comparison MVP (VisualModel, in-process)
 
 В `logo_comparison` доступен MVP-режим in-process интеграции с `VisualModel`.
 
@@ -72,6 +72,52 @@ curl -X POST "http://127.0.0.1:8000/api/v1/logo-comparison" \
 - Для MVP `asset_ref` поддерживает `file://...`, `logo://...` и обычный путь.
 - Если `VISUALMODEL_ENABLED=false`, endpoint работает в режиме placeholder-ответа.
 - Для рабочего VisualModel-режима должны быть доступны `torch/torchvision` и файлы embeddings.
+- Этот режим относится только к in-process интеграции для `logo_comparison`. На тестовом стенде similarity-поиск по логотипам и тексту выполняется через отдельные sidecar-контейнеры `visual-model-service` и `text-model-service`.
+
+## Text similarity (TextModel + sidecar)
+
+Исходники пайплайна (офлайн, без вызовов HF из рантайма контейнера при `local_files_only`) лежат в каталоге **`TextModel/`** в монорепе: см. [`TextModel/src/README.md`](../TextModel/src/README.md) — установка зависимостей, скачивание snapshot **`cointegrated/rubert-tiny2`** в `TextModel/models/rubert-tiny2`, сборка индекса:
+
+```bash
+cd ../TextModel
+python src/embedding.py \
+  --csv data/temp_trademark.csv \
+  --model-path models/rubert-tiny2 \
+  --output-pt models/text_embedding.pt
+```
+
+На выходе: `models/text_embedding.pt` и одноимённый sidecar **`models/text_embedding.csv`** (метаданные по строкам).
+
+Runtime similarity для тестового стенда и прокси-ручки backend — контейнер **`backend/text-model-service/`** ([`text-model-service/README.md`](text-model-service/README.md)): там же переменные `EMBEDDINGS_PT_PATH`, `EMBEDDINGS_CSV_PATH`, `MODEL_PATH` внутри контейнера (`/app/models/...`).
+
+Пример запроса к backend (нужны запущенные backend и `text-model-service`, см. переменные ниже):
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/text-similarity/search" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"EUROPLEX","mktu_codes":[5,35],"top_k":10}'
+```
+
+`/api/v1/text-infringement` по-прежнему относится к Stage 1 контракту и **не** использует этот sidecar напрямую.
+
+## Sidecar-поиск на стенде (logo + text)
+
+Публичные прокси-ручки backend:
+
+- `POST /api/v1/logo-similarity/search` -> `visual-model-service`
+- `POST /api/v1/text-similarity/search` -> `text-model-service`
+
+Полезные переменные для локальной отладки backend sidecar-вызовов (см. `src/naming_check_backend/shared/settings.py`):
+
+```bash
+VISUAL_MODEL_SERVICE_BASE_URL=http://127.0.0.1:9000
+VISUAL_MODEL_SERVICE_TIMEOUT_SECONDS=300
+VISUAL_MODEL_SERVICE_MAX_TOP_K=200
+
+TEXT_MODEL_SERVICE_BASE_URL=http://127.0.0.1:9100
+TEXT_MODEL_SERVICE_TIMEOUT_SECONDS=120
+TEXT_MODEL_SERVICE_MAX_TOP_K=200
+```
 
 ## CI/CD
 
@@ -86,9 +132,10 @@ curl -X POST "http://127.0.0.1:8000/api/v1/logo-comparison" \
 - Workflow деплоя: `.github/workflows/deploy-test-stand.yml`
 - Триггеры: **`workflow_dispatch` (ручной запуск)** и `push` в `main`
 - Перед деплоем workflow повторно запускает `make ci`
-- На сервер rsync’ится весь каталог backend, затем там собираются **два** образа Docker:
+- На сервер rsync’ится весь каталог backend, затем там собираются **три** образа Docker:
   - `naming-check-backend` (этот сервис)
   - `visual-model-service` (каталог `visual-model-service/`, FastAPI поверх embeddings + VGG16, CPU-only)
+  - `text-model-service` (каталог `text-model-service/`, FastAPI поверх text embeddings + ruBERT snapshot, CPU-only)
 
 Обязательные `GitHub Secrets`:
 
@@ -101,10 +148,13 @@ curl -X POST "http://127.0.0.1:8000/api/v1/logo-comparison" \
 - `TEST_STAND_PORT` (по умолчанию `22`)
 - `TEST_STAND_APP_DIR` (по умолчанию `/opt/naming-check-backend`)
 - `TEST_STAND_BIND_PORT` (по умолчанию `8000`, публикация порта контейнера бэкенда наружу)
-- `TEST_STAND_ENV_FILE` (многострочный runtime `.env` для контейнера бэкенда; при необходимости переопределите `VISUAL_MODEL_SERVICE_BASE_URL` — в деплое по умолчанию `http://visual-model-service:9000` в общей Docker-сети)
+- `TEST_STAND_ENV_FILE` (многострочный runtime `.env` для контейнера бэкенда; при необходимости переопределите `VISUAL_MODEL_SERVICE_BASE_URL` и `TEXT_MODEL_SERVICE_BASE_URL` — в деплое по умолчанию `http://visual-model-service:9000` и `http://text-model-service:9000` в общей Docker-сети)
 - `TEST_STAND_VISUAL_MODELS_DIR` (хост-путь к папке с **`logos_embedding.pt`** и **`logos_embedding.csv`**, по умолчанию `/opt/visual-model-models`)
 - `TEST_STAND_VISUAL_BIND_PORT` (порт на **localhost** сервера для визуального сервиса, по умолчанию `9000`; наружу не торчит, только `127.0.0.1`)
 - `TEST_STAND_VISUAL_ENV_FILE` (доп. строки в `.env` визуального сервиса)
+- `TEST_STAND_TEXT_MODELS_DIR` (хост-путь к папке с **`text_embedding.pt`**, **`text_embedding.csv`** и **`rubert-tiny2/`**, по умолчанию `/opt/text-model-models`)
+- `TEST_STAND_TEXT_BIND_PORT` (порт на **localhost** сервера для текстового сервиса, по умолчанию `9100`; наружу не торчит, только `127.0.0.1`)
+- `TEST_STAND_TEXT_ENV_FILE` (доп. строки в `.env` текстового сервиса, например override `MODEL_PATH`)
 
 Одноразовая подготовка сервера (Ubuntu): скрипт `scripts/bootstrap-test-stand-ubuntu.sh` (Docker, пользователь, каталоги). **Пароли в Actions не использовать** — только ключ в secrets.
 
@@ -129,12 +179,35 @@ bash scripts/sync-visual-artifacts-to-test-stand.sh
 bash scripts/smoke-visual-service-local.sh /path/to/models
 ```
 
+Текстовые артефакты для `text-model-service` (их нет в Git):
+
+```bash
+sudo mkdir -p /opt/text-model-models
+sudo cp text_embedding.pt text_embedding.csv /opt/text-model-models/
+sudo rsync -a rubert-tiny2/ /opt/text-model-models/rubert-tiny2/
+```
+
+Из монорепы (рядом `TextModel/`): после настройки **SSH по ключу**:
+
+```bash
+bash scripts/sync-text-artifacts-to-test-stand.sh
+```
+
+Скопирует `text_embedding.pt`, `text_embedding.csv` и snapshot `rubert-tiny2/` в `/opt/text-model-models/`.
+
+Локальная проверка контейнера текстового сервиса:
+
+```bash
+bash scripts/smoke-text-service-local.sh /path/to/models
+```
+
 Требования к серверу стенда:
 
 - установлен Docker;
 - пользователь из `TEST_STAND_USER` может выполнять Docker-команды;
 - открыт порт, на который публикуется контейнер бэкенда (`TEST_STAND_BIND_PORT`);
 - визуальный сервис слушает на `127.0.0.1:$TEST_STAND_VISUAL_BIND_PORT` на том же сервере;
+- текстовый сервис слушает на `127.0.0.1:$TEST_STAND_TEXT_BIND_PORT` на том же сервере;
 - не использовать пароль в workflow, доступ настроить только через `SSH`-ключ в secrets.
 
 ## Участие
