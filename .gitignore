@@ -7,4 +7,8 @@ __pycache__/
 .coverage
 htmlcov/
 .env
-*.egg-info
+.torch_home/
+
+
+test-stand-deploy
+test-stand-deploy.pub

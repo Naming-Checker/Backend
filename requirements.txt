@@ -1,0 +1,4 @@
+# Installs the package + dev deps from pyproject.toml (do not empty this file).
+-e .[dev]
+# Explicit fallback so file-upload routes work even if the line above is skipped.
+python-multipart>=0.0.18,<1.0.0

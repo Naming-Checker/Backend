@@ -384,6 +384,79 @@ class Stage2WebhookResponse(BaseModel):
     )
 
 
+class LogoSimilarityMatch(BaseModel):
+    logo_path: str
+    cosine_similarity: float = Field(..., ge=-1.0, le=1.0)
+    similarity_percent: float
+
+
+class LogoSimilaritySearchResponse(BaseModel):
+    top_k: int = Field(ge=1)
+    matches: list[LogoSimilarityMatch]
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "top_k": 3,
+                "matches": [
+                    {
+                        "logo_path": "data/logos/1001179.jpg",
+                        "cosine_similarity": 1.0,
+                        "similarity_percent": 100.0,
+                    }
+                ],
+            }
+        }
+    )
+
+
+class TextSimilaritySearchRequest(BaseModel):
+    query: str = Field(min_length=1, description="Naming query to search in trademark index.")
+    mktu_codes: list[int] = Field(
+        default_factory=list,
+        description="Optional Nice classes to filter candidates before ranking.",
+    )
+    top_k: int = Field(default=10, ge=1, le=200)
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"query": "EUROPLEX", "mktu_codes": [5, 35], "top_k": 10}}
+    )
+
+
+class TextSimilarityMatch(BaseModel):
+    name_clean: str
+    name_display: str
+    mark_significant: str
+    certificate_link: str
+    mktu_codes: list[int] = Field(default_factory=list)
+    cosine_similarity: float = Field(..., ge=-1.0, le=1.0)
+    similarity_percent: float
+
+
+class TextSimilaritySearchResponse(BaseModel):
+    top_k: int = Field(ge=0)
+    matches: list[TextSimilarityMatch]
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "top_k": 2,
+                "matches": [
+                    {
+                        "name_clean": "europlex",
+                        "name_display": "EUROPLEX",
+                        "mark_significant": "EUROPLEX",
+                        "certificate_link": "https://example.org/cert",
+                        "mktu_codes": [5],
+                        "cosine_similarity": 0.92,
+                        "similarity_percent": 92.0,
+                    }
+                ],
+            }
+        }
+    )
+
+
 class CollectedItem(BaseModel):
     title: str = Field(default="")
     url: str = Field(default="")
@@ -407,6 +480,7 @@ class DirectCollectRequest(BaseModel):
             }
         }
     )
+
 
 
 class DirectCollectResponse(BaseModel):

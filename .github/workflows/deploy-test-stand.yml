@@ -1,12 +1,14 @@
 name: Deploy Test Stand
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: deploy-test-stand-${{ github.ref }}
@@ -17,6 +19,11 @@ env:
   REMOTE_APP_DIR: ${{ secrets.TEST_STAND_APP_DIR != '' && secrets.TEST_STAND_APP_DIR || '/opt/naming-check-backend' }}
   REMOTE_PORT: ${{ secrets.TEST_STAND_PORT != '' && secrets.TEST_STAND_PORT || '22' }}
   HOST_BIND_PORT: ${{ secrets.TEST_STAND_BIND_PORT != '' && secrets.TEST_STAND_BIND_PORT || '8000' }}
+  VISUAL_MODELS_HOST_DIR: ${{ secrets.TEST_STAND_VISUAL_MODELS_DIR != '' && secrets.TEST_STAND_VISUAL_MODELS_DIR || '/opt/visual-model-models' }}
+  VISUAL_DATA_HOST_DIR: ${{ secrets.TEST_STAND_VISUAL_DATA_DIR != '' && secrets.TEST_STAND_VISUAL_DATA_DIR || '/opt/visual-model-data' }}
+  VISUAL_HOST_BIND_PORT: ${{ secrets.TEST_STAND_VISUAL_BIND_PORT != '' && secrets.TEST_STAND_VISUAL_BIND_PORT || '9000' }}
+  TEXT_MODELS_HOST_DIR: ${{ secrets.TEST_STAND_TEXT_MODELS_DIR != '' && secrets.TEST_STAND_TEXT_MODELS_DIR || '/opt/text-model-models' }}
+  TEXT_HOST_BIND_PORT: ${{ secrets.TEST_STAND_TEXT_BIND_PORT != '' && secrets.TEST_STAND_TEXT_BIND_PORT || '9100' }}
 
 jobs:
   pre-deploy-checks:
@@ -44,15 +51,88 @@ jobs:
       - name: Run CI checks before deploy
         run: make ci
 
-  deploy:
-    name: deploy-test-stand
+  # Build heavy images (PyTorch) on the runner — tiny VPS disks cannot finish `docker build` locally.
+  build-and-push-images:
+    name: build-and-push-images
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
-    environment: test-stand
+    outputs:
+      registry_prefix: ${{ steps.meta.outputs.prefix }}
+      image_tag: ${{ steps.meta.outputs.tag }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Image names (GHCR, lowercase)
+        id: meta
+        run: |
+          set -euo pipefail
+          repo_lc="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "prefix=ghcr.io/${repo_lc}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        run: |
+          set -euo pipefail
+          prefix="${{ steps.meta.outputs.prefix }}"
+          tag="${{ steps.meta.outputs.tag }}"
+          docker build -t "${prefix}/naming-check-backend:${tag}" .
+          docker push "${prefix}/naming-check-backend:${tag}"
+
+      - name: Build and push visual-model-service image
+        run: |
+          set -euo pipefail
+          prefix="${{ steps.meta.outputs.prefix }}"
+          tag="${{ steps.meta.outputs.tag }}"
+          docker build -t "${prefix}/visual-model-service:${tag}" ./visual-model-service
+          docker push "${prefix}/visual-model-service:${tag}"
+
+      - name: Build and push text-model-service image
+        run: |
+          set -euo pipefail
+          prefix="${{ steps.meta.outputs.prefix }}"
+          tag="${{ steps.meta.outputs.tag }}"
+          docker build -t "${prefix}/text-model-service:${tag}" ./text-model-service
+          docker push "${prefix}/text-model-service:${tag}"
+
+  deploy:
+    name: deploy-test-stand
+    runs-on: ubuntu-latest
+    needs: build-and-push-images
+    environment: test-stand
+    # Caps rare hangs (SSH/docker exec stuck); pulls + verify should finish well under this.
+    timeout-minutes: 45
+
+    env:
+      # Prevent long idle SSH sessions from dropping mid `docker build` (Broken pipe / exit 255).
+      GHA_SSH_OPTS: >-
+        -o ServerAliveInterval=30
+        -o ServerAliveCountMax=480
+        -o TCPKeepAlive=yes
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Require deploy secrets
+        env:
+          TEST_STAND_HOST: ${{ secrets.TEST_STAND_HOST }}
+          TEST_STAND_SSH_KEY: ${{ secrets.TEST_STAND_SSH_KEY }}
+          TEST_STAND_USER: ${{ secrets.TEST_STAND_USER }}
+        run: |
+          missing=
+          [ -z "$TEST_STAND_HOST" ] && { echo "::error::TEST_STAND_HOST is empty or unset. Add it under Settings → Secrets → Actions (or Environment \`test-stand\` → environment secrets)."; missing=1; }
+          [ -z "$TEST_STAND_SSH_KEY" ] && { echo "::error::TEST_STAND_SSH_KEY is empty or unset."; missing=1; }
+          [ -z "$TEST_STAND_USER" ] && { echo "::error::TEST_STAND_USER is empty or unset."; missing=1; }
+          exit "${missing:-0}"
 
       - name: Configure SSH key
         env:
@@ -64,11 +144,15 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
 
       - name: Trust test stand host key
-        run: ssh-keyscan -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_HOST }}" >> ~/.ssh/known_hosts
+        env:
+          TEST_STAND_HOST: ${{ secrets.TEST_STAND_HOST }}
+        run: ssh-keyscan -p "$REMOTE_PORT" "$TEST_STAND_HOST" >> ~/.ssh/known_hosts
 
       - name: Sync backend source to test stand
         run: |
-          ssh -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+          RSYNC_RSH="ssh ${{ env.GHA_SSH_OPTS }} -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -p ${REMOTE_PORT}"
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "mkdir -p '$REMOTE_APP_DIR'"
           rsync -az --delete \
             --exclude '.git' \
@@ -77,38 +161,242 @@ jobs:
             --exclude '.mypy_cache' \
             --exclude '.pytest_cache' \
             --exclude '.ruff_cache' \
+            --exclude '*.pt' \
+            --exclude '.env' \
+            -e "$RSYNC_RSH" \
             ./ "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}:$REMOTE_APP_DIR/"
 
-      - name: Write runtime env file on test stand
+      - name: Ensure visual models directory exists on server
+        run: |
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "mkdir -p '$VISUAL_MODELS_HOST_DIR'"
+
+      - name: Ensure visual data directory exists on server
+        run: |
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "mkdir -p '$VISUAL_DATA_HOST_DIR/data/logos'"
+
+      - name: Ensure text models directory exists on server
+        run: |
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "mkdir -p '$TEXT_MODELS_HOST_DIR'"
+
+      - name: Write runtime env file on test stand (backend)
         env:
           TEST_STAND_ENV_FILE: ${{ secrets.TEST_STAND_ENV_FILE }}
         run: |
-          cat <<EOF | ssh -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+          cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "cat > '$REMOTE_APP_DIR/.env.runtime'"
           APP_NAME=Backend Service
           APP_ENV=production
           APP_HOST=0.0.0.0
           APP_PORT=8000
+          VISUAL_MODEL_SERVICE_BASE_URL=http://visual-model-service:9000
+          TEXT_MODEL_SERVICE_BASE_URL=http://text-model-service:9000
+          CORS_ALLOW_ORIGINS=http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8080,http://localhost:8080,http://127.0.0.1:5500,http://localhost:5500,http://127.0.0.1:3000,http://localhost:3000
+          CORS_ALLOW_METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+          CORS_ALLOW_HEADERS=*
+          CORS_ALLOW_CREDENTIALS=false
           $TEST_STAND_ENV_FILE
           EOF
 
-      - name: Build and restart backend container
+      - name: Write runtime env file on test stand (visual model)
+        env:
+          TEST_STAND_VISUAL_ENV_FILE: ${{ secrets.TEST_STAND_VISUAL_ENV_FILE }}
         run: |
-          ssh -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
-            "set -e
-            docker build -t naming-check-backend:main '$REMOTE_APP_DIR'
-            docker rm -f naming-check-backend >/dev/null 2>&1 || true
-            docker run -d \
-              --name naming-check-backend \
-              --restart unless-stopped \
-              --env-file '$REMOTE_APP_DIR/.env.runtime' \
-              -p '$HOST_BIND_PORT:8000' \
-              naming-check-backend:main"
+          cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "cat > '$REMOTE_APP_DIR/visual-model-service/.env.runtime'"
+          LOG_LEVEL=INFO
+          APP_HOST=0.0.0.0
+          APP_PORT=9000
+          EMBEDDINGS_PT_PATH=/app/models/logos_embedding.pt
+          EMBEDDINGS_CSV_PATH=/app/models/logos_embedding.csv
+          ASSETS_ROOT=/app/assets
+          $TEST_STAND_VISUAL_ENV_FILE
+          EOF
 
-      - name: Verify deployed container
+      - name: Write runtime env file on test stand (text model)
+        env:
+          TEST_STAND_TEXT_ENV_FILE: ${{ secrets.TEST_STAND_TEXT_ENV_FILE }}
         run: |
-          ssh -p "$REMOTE_PORT" "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
-            "set -e
-            sleep 3
-            docker ps --filter name=naming-check-backend --format '{{.Names}} {{.Status}}'
-            docker exec naming-check-backend python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health').read()\" >/dev/null"
+          cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "cat > '$REMOTE_APP_DIR/text-model-service/.env.runtime'"
+          LOG_LEVEL=INFO
+          APP_HOST=0.0.0.0
+          APP_PORT=9000
+          EMBEDDINGS_PT_PATH=/app/models/text_embedding.pt
+          EMBEDDINGS_CSV_PATH=/app/models/text_embedding.csv
+          MODEL_PATH=/app/models/rubert-tiny2
+          $TEST_STAND_TEXT_ENV_FILE
+          EOF
+
+      - name: Pull and restart containers (images from GHCR)
+        run: |
+          set -euo pipefail
+          PREFIX="${{ needs.build-and-push-images.outputs.registry_prefix }}"
+          TAG="${{ needs.build-and-push-images.outputs.image_tag }}"
+          export GHCR_PULL_TOKEN="${{ secrets.GHCR_PULL_TOKEN }}"
+          export GHCR_PULL_USER="${{ secrets.GHCR_PULL_USER }}"
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            env \
+              PREFIX="$PREFIX" \
+              TAG="$TAG" \
+              REMOTE_APP_DIR="$REMOTE_APP_DIR" \
+              VISUAL_MODELS_HOST_DIR="$VISUAL_MODELS_HOST_DIR" \
+              VISUAL_DATA_HOST_DIR="$VISUAL_DATA_HOST_DIR" \
+              TEXT_MODELS_HOST_DIR="$TEXT_MODELS_HOST_DIR" \
+              HOST_BIND_PORT="$HOST_BIND_PORT" \
+              VISUAL_HOST_BIND_PORT="$VISUAL_HOST_BIND_PORT" \
+              TEXT_HOST_BIND_PORT="$TEXT_HOST_BIND_PORT" \
+              GHCR_PULL_TOKEN="$GHCR_PULL_TOKEN" \
+              GHCR_PULL_USER="$GHCR_PULL_USER" \
+            bash -s <<'EOS'
+          set -euo pipefail
+          if [ -n "${GHCR_PULL_TOKEN:-}" ] && [ -n "${GHCR_PULL_USER:-}" ]; then
+            printf '%s\n' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_PULL_USER" --password-stdin
+          fi
+          pull_with_retry() {
+            image="$1"
+            attempts="${2:-6}"
+            delay="${3:-10}"
+            i=1
+            while [ "$i" -le "$attempts" ]; do
+              if docker pull "$image"; then
+                return 0
+              fi
+              if [ "$i" -eq "$attempts" ]; then
+                echo "::error::Failed to pull $image after $attempts attempts." >&2
+                return 1
+              fi
+              echo "Pull failed for $image (attempt $i/$attempts). Retrying in ${delay}s..." >&2
+              sleep "$delay"
+              i=$((i + 1))
+            done
+          }
+          pull_with_retry "${PREFIX}/naming-check-backend:${TAG}" 6 15
+          pull_with_retry "${PREFIX}/visual-model-service:${TAG}" 6 15
+          pull_with_retry "${PREFIX}/text-model-service:${TAG}" 6 15
+          echo "Pull complete. Starting containers..."
+          docker network create naming-check-net 2>/dev/null || true
+          docker rm -f naming-check-backend >/dev/null 2>&1 || true
+          docker rm -f visual-model-service >/dev/null 2>&1 || true
+          docker rm -f text-model-service >/dev/null 2>&1 || true
+          docker run -d \
+            --name visual-model-service \
+            --network naming-check-net \
+            --restart unless-stopped \
+            --env-file "${REMOTE_APP_DIR}/visual-model-service/.env.runtime" \
+            -v "${VISUAL_MODELS_HOST_DIR}:/app/models:ro" \
+            -v "${VISUAL_DATA_HOST_DIR}:/app/assets:ro" \
+            -p "127.0.0.1:${VISUAL_HOST_BIND_PORT}:9000" \
+            "${PREFIX}/visual-model-service:${TAG}"
+          docker run -d \
+            --name text-model-service \
+            --network naming-check-net \
+            --restart unless-stopped \
+            --env-file "${REMOTE_APP_DIR}/text-model-service/.env.runtime" \
+            -v "${TEXT_MODELS_HOST_DIR}:/app/models:ro" \
+            -p "127.0.0.1:${TEXT_HOST_BIND_PORT}:9000" \
+            "${PREFIX}/text-model-service:${TAG}"
+          docker run -d \
+            --name naming-check-backend \
+            --network naming-check-net \
+            --restart unless-stopped \
+            --env-file "${REMOTE_APP_DIR}/.env.runtime" \
+            -p "${HOST_BIND_PORT}:8000" \
+            "${PREFIX}/naming-check-backend:${TAG}"
+          echo "Containers started."
+          docker image prune -f --filter until=24h >/dev/null 2>&1 || true
+          EOS
+
+
+      - name: Verify deployed containers
+        run: |
+          set -euo pipefail
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            bash -s <<'VERIFY'
+          set -euo pipefail
+          sleep 8
+          docker ps --filter name=naming-check-backend
+          docker ps --filter name=visual-model-service
+          docker ps --filter name=text-model-service
+
+          ok_backend=0
+          attempt=0
+          for _ in $(seq 1 72); do
+            attempt=$((attempt + 1))
+            # timeout(1) avoids a stuck docker exec blocking the whole GitHub job.
+            if timeout 40 docker exec naming-check-backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=10).read()" >/dev/null 2>&1; then
+              ok_backend=1
+              echo "Backend health OK (attempt ${attempt})."
+              break
+            fi
+            if [[ $((attempt % 6)) -eq 0 ]]; then
+              echo "[verify] still waiting for backend HTTP on :8000 (${attempt}/72, ~$((attempt * 5))s)..."
+            fi
+            sleep 5
+          done
+          if [[ "${ok_backend}" != 1 ]]; then
+            docker logs naming-check-backend --tail 200 >&2 || true
+            exit 1
+          fi
+
+          # Wait for embeddings + VGG to finish loading (can be several minutes on small VPS).
+          ok_visual=0
+          attempt=0
+          for _ in $(seq 1 120); do
+            attempt=$((attempt + 1))
+            if timeout 40 docker exec visual-model-service python -c "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=10); d=json.loads(r.read().decode()); raise SystemExit(0 if d.get('status')=='ok' else 1)" >/dev/null 2>&1; then
+              ok_visual=1
+              echo "Visual health OK (attempt ${attempt}, status ok)."
+              break
+            else
+              te=$?
+              if [[ "${te}" -eq 124 ]]; then
+                echo "[verify] docker exec or health check hit 40s wall-clock limit (attempt ${attempt}). Check docker / container CPU." >&2
+              fi
+            fi
+            if [[ $((attempt % 6)) -eq 0 ]]; then
+              echo "[verify] waiting for visual /health status=ok (embeddings+VGG warm-up) (${attempt}/120, ~$((attempt * 5))s max)..."
+            fi
+            sleep 5
+          done
+          if [[ "${ok_visual}" != 1 ]]; then
+            echo "::error::Visual did not reach health status=ok within ~10m. Often: wrong/missing mount for logos_embedding.pt + .csv, OOM, or disk I/O. See logs below." >&2
+            docker logs visual-model-service --tail 300 >&2 || true
+            exit 1
+          fi
+
+          ok_text=0
+          attempt=0
+          for _ in $(seq 1 120); do
+            attempt=$((attempt + 1))
+            if timeout 40 docker exec text-model-service python -c "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=10); d=json.loads(r.read().decode()); raise SystemExit(0 if d.get('status')=='ok' else 1)" >/dev/null 2>&1; then
+              ok_text=1
+              echo "Text health OK (attempt ${attempt}, status ok)."
+              break
+            else
+              te=$?
+              if [[ "${te}" -eq 124 ]]; then
+                echo "[verify] text-model-service health check hit 40s wall-clock limit (attempt ${attempt})." >&2
+              fi
+            fi
+            if [[ $((attempt % 6)) -eq 0 ]]; then
+              echo "[verify] waiting for text /health status=ok (model+embeddings warm-up) (${attempt}/120, ~$((attempt * 5))s max)..."
+            fi
+            sleep 5
+          done
+          if [[ "${ok_text}" != 1 ]]; then
+            echo "::error::Text model did not reach health status=ok within ~10m. Often: missing text_embedding.pt/.csv, missing rubert-tiny2 snapshot, or OOM." >&2
+            docker logs text-model-service --tail 300 >&2 || true
+            exit 1
+          fi
+          VERIFY
