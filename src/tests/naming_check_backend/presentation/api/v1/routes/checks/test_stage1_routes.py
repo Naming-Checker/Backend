@@ -68,9 +68,9 @@ def test_openapi_exposes_contract_schemas(client: TestClient) -> None:
     webhook_operation = document["paths"]["/api/v1/webhooks/stage2-results"]["post"]
 
     assert registration_operation["summary"] == "Submit registration check"
-    assert webhook_operation["responses"]["202"]["content"]["application/json"]["schema"][
-        "$ref"
-    ].endswith("/Stage2WebhookResponse")
+    assert webhook_operation["responses"]["202"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/Stage2WebhookResponse"
+    )
     assert "RegistrationCheckRequest" in document["components"]["schemas"]
     assert "ErrorResponse" in document["components"]["schemas"]
 

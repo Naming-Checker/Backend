@@ -11,6 +11,8 @@ COPY src ./src
 RUN python -m pip install --upgrade pip \
     && python -m pip install .
 
+RUN playwright install --with-deps chromium
+
 EXPOSE 8000
 
 CMD ["python", "src/manage.py", "run-server"]
