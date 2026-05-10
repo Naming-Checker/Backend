@@ -2,6 +2,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from naming_check_backend.shared.resources import Resource
+
 
 class FlowType(StrEnum):
     REGISTRATION_CHECK = "registration_check"
@@ -95,9 +97,7 @@ class RegistrationCheckRequest(BaseModel):
         description="Nice classes used for candidate filtering and Stage 2 deduplication.",
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={"example": {"naming": "PROBIMAX", "mktu_codes": [5, 25]}}
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"naming": "PROBIMAX", "mktu_codes": [5, 25]}})
 
 
 class RegistrationCheckResponse(BaseModel):
@@ -333,7 +333,7 @@ class Stage2WebhookRequest(BaseModel):
     mktu_codes: list[int] = Field(default_factory=list)
     partial: bool = True
     matches: list[MatchCandidate] = Field(default_factory=list)
-    source_batch: list[str] = Field(default_factory=list)
+    source_batch: list[Resource] = Field(default_factory=list)
     error: ErrorDetail | None = None
 
     model_config = ConfigDict(
@@ -452,6 +452,49 @@ class TextSimilaritySearchResponse(BaseModel):
                         "similarity_percent": 92.0,
                     }
                 ],
+            }
+        }
+    )
+
+
+class CollectedItem(BaseModel):
+    title: str = Field(default="")
+    url: str = Field(default="")
+    snippet: str | None = None
+
+
+class CollectedSourceBatch(BaseModel):
+    source: Resource
+    results: list[CollectedItem] = Field(default_factory=list)
+
+
+class DirectCollectRequest(BaseModel):
+    query: str = Field(min_length=1, description="Search phrase to query external sources")
+    resources: list[Resource] = Field(min_length=1, description="List of resources to query")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "query": "PROBIMAX",
+                "resources": ["google_play", "kinopoisk"],
+            }
+        }
+    )
+
+
+
+class DirectCollectResponse(BaseModel):
+    results: list[CollectedSourceBatch] = Field(default_factory=list)
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "results": [
+                    {
+                        "source": "google_play",
+                        "results": [{"title": "App", "url": "https://...", "snippet": "Desc"}],
+                    }
+                ]
             }
         }
     )

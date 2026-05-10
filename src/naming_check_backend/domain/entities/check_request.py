@@ -48,15 +48,9 @@ class CheckRequest:
     def __post_init__(self) -> None:
         if not self.request_id.strip():
             raise DomainError("request_id cannot be empty.")
-        if self.flow is FlowType.REGISTRATION_CHECK and not isinstance(
-            self.payload, RegistrationPayload
-        ):
+        if self.flow is FlowType.REGISTRATION_CHECK and not isinstance(self.payload, RegistrationPayload):
             raise DomainError("Registration flow requires RegistrationPayload.")
-        if self.flow is FlowType.TEXT_INFRINGEMENT and not isinstance(
-            self.payload, TextInfringementPayload
-        ):
+        if self.flow is FlowType.TEXT_INFRINGEMENT and not isinstance(self.payload, TextInfringementPayload):
             raise DomainError("Text infringement flow requires TextInfringementPayload.")
-        if self.flow is FlowType.LOGO_COMPARISON and not isinstance(
-            self.payload, LogoComparisonPayload
-        ):
+        if self.flow is FlowType.LOGO_COMPARISON and not isinstance(self.payload, LogoComparisonPayload):
             raise DomainError("Logo comparison flow requires LogoComparisonPayload.")

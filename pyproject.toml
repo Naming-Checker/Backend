@@ -8,6 +8,8 @@ dependencies = [
     "uvicorn[standard]>=0.30.0,<1.0.0",
     "pydantic>=2.8.0,<3.0.0",
     "pydantic-settings>=2.4.0,<3.0.0",
+    "beautifulsoup4==4.14.3",
+    "playwright==1.59.0",
     "httpx>=0.27.0,<1.0.0",
     "python-multipart>=0.0.18,<1.0.0",
 ]
@@ -32,7 +34,7 @@ where = ["src"]
 exclude = ["tests*"]
 
 [tool.ruff]
-line-length = 100
+line-length = 110
 src = ["src"]
 target-version = "py311"
 

@@ -49,19 +49,14 @@ class LogoComparisonUseCase:
         summary = self._build_summary()
         return request, ConflictResultSet(request_id=request_id, candidates=ranked), summary
 
-    def _build_candidates(
-        self, reference_logo: LogoAssetRef, mktu_set: MktuClassSet
-    ) -> list[MatchCandidate]:
+    def _build_candidates(self, reference_logo: LogoAssetRef, mktu_set: MktuClassSet) -> list[MatchCandidate]:
         if self._visual_model_adapter is None:
             return self._placeholder_candidates(mktu_set)
         query_image_path = self._resolve_asset_ref(reference_logo.asset_ref)
         matches = self._visual_model_adapter.find_similar(query_image_path)
         if not matches:
             return self._placeholder_candidates(mktu_set)
-        return [
-            self._to_domain_match(match, mktu_set, idx)
-            for idx, match in enumerate(matches, start=1)
-        ]
+        return [self._to_domain_match(match, mktu_set, idx) for idx, match in enumerate(matches, start=1)]
 
     def _to_domain_match(
         self, match: VisualModelMatch, mktu_set: MktuClassSet, position: int
