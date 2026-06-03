@@ -6,10 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOGGING_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 if [[ -f "${LOGGING_DIR}/.env.elk" ]]; then
-  set -a
-  # shellcheck source=/dev/null
-  source "${LOGGING_DIR}/.env.elk"
-  set +a
+  ELASTIC_PASSWORD="$(grep -E '^ELASTIC_PASSWORD=' "${LOGGING_DIR}/.env.elk" | tail -1 | cut -d= -f2- | tr -d '"')"
 fi
 
 ELASTIC_PASSWORD="${ELASTIC_PASSWORD:-}"

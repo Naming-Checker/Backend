@@ -247,7 +247,7 @@ jobs:
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "cat > '$REMOTE_APP_DIR/infra/logging/.env.elk'"
           STACK_VERSION=8.17.0
-          ES_JAVA_OPTS=-Xms512m -Xmx512m
+          ES_JAVA_OPTS="-Xms512m -Xmx512m"
           $TEST_STAND_ELK_ENV_FILE
           EOF
 
@@ -433,10 +433,7 @@ jobs:
           if docker ps --format '{{.Names}}' | grep -qx 'kibana'; then
             ELK_ENV="${REMOTE_APP_DIR}/infra/logging/.env.elk"
             if [ -f "${ELK_ENV}" ]; then
-              set -a
-              # shellcheck source=/dev/null
-              . "${ELK_ENV}"
-              set +a
+              ELASTIC_PASSWORD="$(grep -E '^ELASTIC_PASSWORD=' "${ELK_ENV}" | tail -1 | cut -d= -f2- | tr -d '"')"
             fi
             ok_kibana=0
             for _ in $(seq 1 36); do
