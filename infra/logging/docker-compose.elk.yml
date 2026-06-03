@@ -56,6 +56,9 @@ services:
       - ELASTICSEARCH_USERNAME=kibana_system
       - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD:-${ELASTIC_PASSWORD}}
       - SERVER_PUBLICBASEURL=${KIBANA_PUBLIC_BASE_URL:-http://127.0.0.1:5601}
+      - SERVER_DEFAULTROUTE=/app/discover
+      - XPACK_FLEET_AGENTS_ENABLED=false
+      - TELEMETRY_ENABLED=false
     ports:
       - "5601:5601"
     networks:
@@ -71,6 +74,22 @@ services:
       timeout: 10s
       retries: 30
       start_period: 90s
+
+  kibana-setup:
+    image: curlimages/curl:8.5.0
+    container_name: kibana-setup
+    depends_on:
+      kibana:
+        condition: service_healthy
+    environment:
+      KIBANA_URL: http://kibana:5601
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    volumes:
+      - ./scripts/setup-kibana.sh:/setup-kibana.sh:ro
+    networks:
+      - naming-check-net
+    restart: "no"
+    entrypoint: ["/bin/sh", "/setup-kibana.sh"]
 
   filebeat:
     image: docker.elastic.co/beats/filebeat:${STACK_VERSION:-8.17.0}
