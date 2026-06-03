@@ -19,10 +19,8 @@ docker compose -f "${LOGGING_DIR}/docker-compose.elk.yml" \
   --project-directory "${LOGGING_DIR}" \
   up -d
 
-bash "${LOGGING_DIR}/scripts/apply-ilm.sh"
-
 echo
-echo "ELK stack is starting."
-echo "- Kibana: http://127.0.0.1:5601 (user: elastic, password from ${ENV_FILE})"
+echo "ELK stack is starting (elk-setup configures kibana_system + ILM before Kibana starts)."
+echo "- Kibana UI: http://127.0.0.1:5601 (login: elastic, password ELASTIC_PASSWORD from ${ENV_FILE})"
 echo "- Ensure app containers use network naming-check-net so Filebeat collects their logs."
 echo "- Stop: docker compose -f ${LOGGING_DIR}/docker-compose.elk.yml --env-file ${ENV_FILE} --project-directory ${LOGGING_DIR} down"

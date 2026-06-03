@@ -306,11 +306,11 @@ jobs:
             pull_with_retry "docker.elastic.co/elasticsearch/elasticsearch:8.17.0" 6 15
             pull_with_retry "docker.elastic.co/kibana/kibana:8.17.0" 6 15
             pull_with_retry "docker.elastic.co/beats/filebeat:8.17.0" 6 15
+            docker rm -f elk-setup >/dev/null 2>&1 || true
             docker compose -f "${ELK_DIR}/docker-compose.elk.yml" \
               --env-file "${ELK_DIR}/.env.elk" \
               --project-directory "${ELK_DIR}" \
               up -d
-            bash "${ELK_DIR}/scripts/apply-ilm.sh"
           else
             echo "::warning::Skipping ELK: ${ELK_DIR}/.env.elk missing ELASTIC_PASSWORD. Set TEST_STAND_ELK_ENV_FILE secret." >&2
           fi
@@ -431,13 +431,9 @@ jobs:
           fi
 
           if docker ps --format '{{.Names}}' | grep -qx 'kibana'; then
-            ELK_ENV="${REMOTE_APP_DIR}/infra/logging/.env.elk"
-            if [ -f "${ELK_ENV}" ]; then
-              ELASTIC_PASSWORD="$(grep -E '^ELASTIC_PASSWORD=' "${ELK_ENV}" | tail -1 | cut -d= -f2- | tr -d '"')"
-            fi
             ok_kibana=0
             for _ in $(seq 1 36); do
-              if curl -fsS -u "elastic:${ELASTIC_PASSWORD}" http://127.0.0.1:5601/api/status >/dev/null 2>&1; then
+              if curl -fsS http://127.0.0.1:5601/api/status | grep -q '"level":"available"'; then
                 ok_kibana=1
                 echo "Kibana status OK."
                 break
