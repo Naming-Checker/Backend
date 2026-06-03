@@ -242,12 +242,14 @@ jobs:
       - name: Write runtime env file on test stand (ELK)
         env:
           TEST_STAND_ELK_ENV_FILE: ${{ secrets.TEST_STAND_ELK_ENV_FILE }}
+          TEST_STAND_HOST: ${{ secrets.TEST_STAND_HOST }}
         run: |
           cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "cat > '$REMOTE_APP_DIR/infra/logging/.env.elk'"
           STACK_VERSION=8.17.0
           ES_JAVA_OPTS="-Xms512m -Xmx512m"
+          KIBANA_PUBLIC_BASE_URL=http://${TEST_STAND_HOST}:5601
           $TEST_STAND_ELK_ENV_FILE
           EOF
 

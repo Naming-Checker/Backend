@@ -55,9 +55,9 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - ELASTICSEARCH_USERNAME=kibana_system
       - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD:-${ELASTIC_PASSWORD}}
-      - SERVER_PUBLICBASEURL=http://127.0.0.1:5601
+      - SERVER_PUBLICBASEURL=${KIBANA_PUBLIC_BASE_URL:-http://127.0.0.1:5601}
     ports:
-      - "127.0.0.1:5601:5601"
+      - "5601:5601"
     networks:
       - naming-check-net
     restart: unless-stopped
