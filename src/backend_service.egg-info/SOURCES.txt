@@ -40,6 +40,7 @@ src/naming_check_backend/domain/value_objects/mktu.py
 src/naming_check_backend/domain/value_objects/naming.py
 src/naming_check_backend/domain/value_objects/similarity.py
 src/naming_check_backend/infrastructure/__init__.py
+src/naming_check_backend/infrastructure/text_similarity_client.py
 src/naming_check_backend/infrastructure/visual_similarity_client.py
 src/naming_check_backend/infrastructure/async_pipeline/__init__.py
 src/naming_check_backend/infrastructure/async_pipeline/async_result_store.py
@@ -50,6 +51,7 @@ src/naming_check_backend/infrastructure/collectors/__init__.py
 src/naming_check_backend/infrastructure/collectors/external_sources.py
 src/naming_check_backend/infrastructure/config/__init__.py
 src/naming_check_backend/infrastructure/ml/__init__.py
+src/naming_check_backend/infrastructure/ml/visual_model_adapter.py
 src/naming_check_backend/infrastructure/observability/__init__.py
 src/naming_check_backend/infrastructure/observability/async_monitoring.py
 src/naming_check_backend/infrastructure/persistence/__init__.py
@@ -66,14 +68,15 @@ src/naming_check_backend/presentation/api/v1/router.py
 src/naming_check_backend/presentation/api/v1/routes/__init__.py
 src/naming_check_backend/presentation/api/v1/routes/health.py
 src/naming_check_backend/presentation/api/v1/routes/checks/__init__.py
-src/naming_check_backend/presentation/api/v1/routes/checks/logo_comparison.py
 src/naming_check_backend/presentation/api/v1/routes/checks/logo_similarity_search.py
-src/naming_check_backend/presentation/api/v1/routes/checks/registration_check.py
-src/naming_check_backend/presentation/api/v1/routes/checks/text_infringement.py
+src/naming_check_backend/presentation/api/v1/routes/checks/text_similarity_search.py
 src/naming_check_backend/presentation/api/v1/routes/webhooks/__init__.py
 src/naming_check_backend/presentation/api/v1/routes/webhooks/stage2_results.py
+src/naming_check_backend/presentation/middleware/__init__.py
+src/naming_check_backend/presentation/middleware/request_logging.py
 src/naming_check_backend/presentation/schemas/__init__.py
 src/naming_check_backend/presentation/schemas/contracts.py
 src/naming_check_backend/presentation/schemas/mappers.py
 src/naming_check_backend/shared/__init__.py
+src/naming_check_backend/shared/json_logging.py
 src/naming_check_backend/shared/settings.py

@@ -40,10 +40,18 @@ usermod -aG docker "$DEPLOY_USER"
 
 install -d -m 755 /opt/naming-check-backend
 install -d -m 755 /opt/visual-model-models
-chown "$DEPLOY_USER:$DEPLOY_USER" /opt/naming-check-backend /opt/visual-model-models
+install -d -m 755 /opt/elk-data
+chown "$DEPLOY_USER:$DEPLOY_USER" /opt/naming-check-backend /opt/visual-model-models /opt/elk-data
+
+if ! grep -q 'vm.max_map_count=262144' /etc/sysctl.d/99-elasticsearch.conf 2>/dev/null; then
+  echo 'vm.max_map_count=262144' > /etc/sysctl.d/99-elasticsearch.conf
+  sysctl -p /etc/sysctl.d/99-elasticsearch.conf
+fi
 
 echo
 echo "Bootstrap complete."
 echo "- Deploy user: $DEPLOY_USER (add SSH key to ~$DEPLOY_USER/.ssh/authorized_keys)"
 echo "- Put models in: /opt/visual-model-models/{logos_embedding.pt,logos_embedding.csv}"
 echo "- GitHub secrets: TEST_STAND_USER=$DEPLOY_USER, TEST_STAND_VISUAL_MODELS_DIR=/opt/visual-model-models"
+echo "- ELK: add TEST_STAND_ELK_ENV_FILE with ELASTIC_PASSWORD=... (see infra/logging/.env.elk.example)"
+echo "- Kibana (after deploy): ssh -L 5601:127.0.0.1:5601 $DEPLOY_USER@<host> then http://localhost:5601"

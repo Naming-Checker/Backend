@@ -120,8 +120,18 @@ CORS_ALLOW_CREDENTIALS=false
 - `TEST_STAND_TEXT_MODELS_DIR` (хост-путь к папке с **`text_embedding.pt`**, **`text_embedding.csv`** и **`rubert-tiny2/`**, по умолчанию `/opt/text-model-models`)
 - `TEST_STAND_TEXT_BIND_PORT` (порт на **localhost** сервера для текстового сервиса, по умолчанию `9100`; наружу не торчит, только `127.0.0.1`)
 - `TEST_STAND_TEXT_ENV_FILE` (доп. строки в `.env` текстового сервиса, например override `MODEL_PATH`)
+- `TEST_STAND_ELK_ENV_FILE` (обязательно для ELK: минимум `ELASTIC_PASSWORD=...`; см. `infra/logging/.env.elk.example`)
 
-Одноразовая подготовка сервера (Ubuntu): скрипт `scripts/bootstrap-test-stand-ubuntu.sh` (Docker, пользователь, каталоги). **Пароли в Actions не использовать** — только ключ в secrets.
+### Централизованное логирование (ELK)
+
+На тестовом стенде при деплое поднимаются **Elasticsearch 8.17**, **Kibana** и **Filebeat** (`infra/logging/docker-compose.elk.yml`). Логи приложений — JSON в stdout, retention **1 день**.
+
+- Kibana только на `127.0.0.1:5601` на сервере; доступ: `ssh -L 5601:127.0.0.1:5601 USER@HOST`, затем http://localhost:5601 (логин `elastic`, пароль из `TEST_STAND_ELK_ENV_FILE`).
+- После первого деплоя в Kibana: **Discover** → data view `logs-naming-check-*`.
+- Локально: `bash scripts/start-elk-local.sh` (создаёт `infra/logging/.env.elk.local` из example).
+- На уже работающем VPS без повторного bootstrap: `sudo sysctl -w vm.max_map_count=262144` и persist в `/etc/sysctl.d/99-elasticsearch.conf`.
+
+Одноразовая подготовка сервера (Ubuntu): скрипт `scripts/bootstrap-test-stand-ubuntu.sh` (Docker, пользователь, каталоги, `vm.max_map_count`). **Пароли в Actions не использовать** — только ключ в secrets.
 
 После загрузки кода деплоя убедитесь, что на сервер скопированы артефакты эмбеддингов (их нет в Git — `.pt` ~380MB):
 

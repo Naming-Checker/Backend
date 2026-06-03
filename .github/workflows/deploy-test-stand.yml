@@ -193,6 +193,7 @@ jobs:
             "cat > '$REMOTE_APP_DIR/.env.runtime'"
           APP_NAME=Backend Service
           APP_ENV=production
+          LOG_LEVEL=INFO
           APP_HOST=0.0.0.0
           APP_PORT=8000
           VISUAL_MODEL_SERVICE_BASE_URL=http://visual-model-service:9000
@@ -212,6 +213,7 @@ jobs:
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "cat > '$REMOTE_APP_DIR/visual-model-service/.env.runtime'"
           LOG_LEVEL=INFO
+          APP_ENV=production
           APP_HOST=0.0.0.0
           APP_PORT=9000
           EMBEDDINGS_PT_PATH=/app/models/logos_embedding.pt
@@ -228,12 +230,25 @@ jobs:
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
             "cat > '$REMOTE_APP_DIR/text-model-service/.env.runtime'"
           LOG_LEVEL=INFO
+          APP_ENV=production
           APP_HOST=0.0.0.0
           APP_PORT=9000
           EMBEDDINGS_PT_PATH=/app/models/text_embedding.pt
           EMBEDDINGS_CSV_PATH=/app/models/text_embedding.csv
           MODEL_PATH=/app/models/rubert-tiny2
           $TEST_STAND_TEXT_ENV_FILE
+          EOF
+
+      - name: Write runtime env file on test stand (ELK)
+        env:
+          TEST_STAND_ELK_ENV_FILE: ${{ secrets.TEST_STAND_ELK_ENV_FILE }}
+        run: |
+          cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "cat > '$REMOTE_APP_DIR/infra/logging/.env.elk'"
+          STACK_VERSION=8.17.0
+          ES_JAVA_OPTS=-Xms512m -Xmx512m
+          $TEST_STAND_ELK_ENV_FILE
           EOF
 
       - name: Pull and restart containers (images from GHCR)
@@ -285,6 +300,20 @@ jobs:
           pull_with_retry "${PREFIX}/text-model-service:${TAG}" 6 15
           echo "Pull complete. Starting containers..."
           docker network create naming-check-net 2>/dev/null || true
+          ELK_DIR="${REMOTE_APP_DIR}/infra/logging"
+          if [ -f "${ELK_DIR}/.env.elk" ] && grep -q '^ELASTIC_PASSWORD=' "${ELK_DIR}/.env.elk"; then
+            echo "Starting ELK stack..."
+            pull_with_retry "docker.elastic.co/elasticsearch/elasticsearch:8.17.0" 6 15
+            pull_with_retry "docker.elastic.co/kibana/kibana:8.17.0" 6 15
+            pull_with_retry "docker.elastic.co/beats/filebeat:8.17.0" 6 15
+            docker compose -f "${ELK_DIR}/docker-compose.elk.yml" \
+              --env-file "${ELK_DIR}/.env.elk" \
+              --project-directory "${ELK_DIR}" \
+              up -d
+            bash "${ELK_DIR}/scripts/apply-ilm.sh"
+          else
+            echo "::warning::Skipping ELK: ${ELK_DIR}/.env.elk missing ELASTIC_PASSWORD. Set TEST_STAND_ELK_ENV_FILE secret." >&2
+          fi
           docker rm -f naming-check-backend >/dev/null 2>&1 || true
           docker rm -f visual-model-service >/dev/null 2>&1 || true
           docker rm -f text-model-service >/dev/null 2>&1 || true
@@ -322,6 +351,7 @@ jobs:
           set -euo pipefail
           ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
             "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            env REMOTE_APP_DIR="$REMOTE_APP_DIR" \
             bash -s <<'VERIFY'
           set -euo pipefail
           sleep 8
@@ -398,5 +428,29 @@ jobs:
             echo "::error::Text model did not reach health status=ok within ~10m. Often: missing text_embedding.pt/.csv, missing rubert-tiny2 snapshot, or OOM." >&2
             docker logs text-model-service --tail 300 >&2 || true
             exit 1
+          fi
+
+          if docker ps --format '{{.Names}}' | grep -qx 'kibana'; then
+            ELK_ENV="${REMOTE_APP_DIR}/infra/logging/.env.elk"
+            if [ -f "${ELK_ENV}" ]; then
+              set -a
+              # shellcheck source=/dev/null
+              . "${ELK_ENV}"
+              set +a
+            fi
+            ok_kibana=0
+            for _ in $(seq 1 36); do
+              if curl -fsS -u "elastic:${ELASTIC_PASSWORD}" http://127.0.0.1:5601/api/status >/dev/null 2>&1; then
+                ok_kibana=1
+                echo "Kibana status OK."
+                break
+              fi
+              sleep 5
+            done
+            if [[ "${ok_kibana}" != 1 ]]; then
+              echo "::error::Kibana did not become available on 127.0.0.1:5601." >&2
+              docker logs kibana --tail 200 >&2 || true
+              exit 1
+            fi
           fi
           VERIFY

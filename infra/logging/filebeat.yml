@@ -1,0 +1,40 @@
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: false
+      templates:
+        - condition:
+            or:
+              - equals:
+                  docker.container.name: naming-check-backend
+              - equals:
+                  docker.container.name: visual-model-service
+              - equals:
+                  docker.container.name: text-model-service
+          config:
+            - type: container
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              json.keys_under_root: true
+              json.add_error_key: true
+              json.ignore_decoding_error: true
+
+processors:
+  - add_docker_metadata: ~
+  - decode_json_fields:
+      fields: ["message"]
+      target: ""
+      overwrite_keys: true
+      add_error_key: true
+      when:
+        regexp:
+          message: '^\s*\{'
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: elastic
+  password: "${ELASTIC_PASSWORD}"
+  index: "logs-naming-check-%{+yyyy.MM.dd}"
+
+setup.ilm.enabled: false
+setup.template.enabled: false

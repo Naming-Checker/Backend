@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Start local ELK stack for development (Elasticsearch + Kibana + Filebeat).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOGGING_DIR="${ROOT}/infra/logging"
+ENV_FILE="${LOGGING_DIR}/.env.elk.local"
+EXAMPLE="${LOGGING_DIR}/.env.elk.example"
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+  cp "${EXAMPLE}" "${ENV_FILE}"
+  echo "Created ${ENV_FILE} — set a strong ELASTIC_PASSWORD before use in shared environments."
+fi
+
+docker network create naming-check-net 2>/dev/null || true
+
+docker compose -f "${LOGGING_DIR}/docker-compose.elk.yml" \
+  --env-file "${ENV_FILE}" \
+  --project-directory "${LOGGING_DIR}" \
+  up -d
+
+bash "${LOGGING_DIR}/scripts/apply-ilm.sh"
+
+echo
+echo "ELK stack is starting."
+echo "- Kibana: http://127.0.0.1:5601 (user: elastic, password from ${ENV_FILE})"
+echo "- Ensure app containers use network naming-check-net so Filebeat collects their logs."
+echo "- Stop: docker compose -f ${LOGGING_DIR}/docker-compose.elk.yml --env-file ${ENV_FILE} --project-directory ${LOGGING_DIR} down"
