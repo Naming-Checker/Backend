@@ -16,14 +16,16 @@ auth=(-u "elastic:${ELASTIC_PASSWORD}")
 headers=(-H "kbn-xsrf: true" -H "Content-Type: application/json")
 
 echo "Waiting for Kibana at ${KIBANA_URL}..."
+ready=0
 for _ in $(seq 1 60); do
-  if curl -fsS "${auth[@]}" "${KIBANA_URL}/api/status" | grep -q '"level":"available"'; then
+  if curl -fsS "${auth[@]}" "${KIBANA_URL}/api/status" 2>/dev/null | grep -q '"level":"available"'; then
+    ready=1
     break
   fi
   sleep 5
 done
 
-if ! curl -fsS "${auth[@]}" "${KIBANA_URL}/api/status" | grep -q '"level":"available"'; then
+if [[ "${ready}" != 1 ]]; then
   echo "Kibana did not become available." >&2
   exit 1
 fi

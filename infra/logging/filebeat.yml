@@ -1,60 +1,31 @@
+# Filebeat 8.12+ requires Docker-specific autodiscover config (see elastic/beats#45864).
 filebeat.autodiscover:
   providers:
     - type: docker
-      hints.enabled: false
+      hints.enabled: true
+      hints.default_config.enabled: false
       templates:
         - condition:
-            or:
-              - contains:
-                  docker.container.name: naming-check-backend
-              - contains:
-                  docker.container.name: visual-model-service
-              - contains:
-                  docker.container.name: text-model-service
+            equals:
+              docker.container.labels.co_elastic_logs_enabled: "true"
           config:
-            - type: container
+            - type: filestream
+              id: "naming-${data.container.id}"
               paths:
-                - /var/lib/docker/containers/${data.docker.container.id}/*.log
-              processors:
-                - add_docker_metadata: ~
+                - /var/lib/docker/containers/${data.container.id}/*.log
+              prospector:
+                scanner:
+                  symlinks: true
+                  fingerprint.enabled: false
+              parsers:
+                - ndjson:
+                    target: ""
+                    message_key: log
+                    keys_under_root: true
+                    add_error_key: true
 
 processors:
-  # Docker json-file: {"log":"...","stream":"stdout","time":"..."}
-  - decode_json_fields:
-      fields: ["message"]
-      target: "docker"
-      add_error_key: true
-      when:
-        regexp:
-          message: '^\s*\{'
-  - decode_json_fields:
-      fields: ["docker.log"]
-      target: ""
-      overwrite_keys: true
-      add_error_key: true
-      when:
-        has_fields: ["docker.log"]
-  # App logs written directly as JSON to stdout (no docker wrapper)
-  - decode_json_fields:
-      fields: ["message"]
-      target: ""
-      overwrite_keys: true
-      add_error_key: true
-      when:
-        and:
-          - regexp:
-              message: '^\s*\{'
-          - not:
-              has_fields: ["service"]
-  - add_fields:
-      target: "data_stream"
-      fields:
-        type: logs
-        dataset: naming-check
-        namespace: default
-  - drop_fields:
-      fields: ["docker.log", "docker.stream", "docker.time", "agent.ephemeral_id"]
-      ignore_missing: true
+  - add_docker_metadata: ~
 
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
@@ -64,3 +35,6 @@ output.elasticsearch:
 
 setup.ilm.enabled: false
 setup.template.enabled: false
+
+logging.level: info
+logging.to_stderr: true

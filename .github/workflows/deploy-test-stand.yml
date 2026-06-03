@@ -321,6 +321,9 @@ jobs:
           docker rm -f text-model-service >/dev/null 2>&1 || true
           docker run -d \
             --name visual-model-service \
+            --label co.elastic.logs/enabled=true \
+            --label co.elastic.logs/json.message_key=log \
+            --label co.elastic.logs/json.keys_under_root=true \
             --network naming-check-net \
             --restart unless-stopped \
             --env-file "${REMOTE_APP_DIR}/visual-model-service/.env.runtime" \
@@ -330,6 +333,9 @@ jobs:
             "${PREFIX}/visual-model-service:${TAG}"
           docker run -d \
             --name text-model-service \
+            --label co.elastic.logs/enabled=true \
+            --label co.elastic.logs/json.message_key=log \
+            --label co.elastic.logs/json.keys_under_root=true \
             --network naming-check-net \
             --restart unless-stopped \
             --env-file "${REMOTE_APP_DIR}/text-model-service/.env.runtime" \
@@ -338,11 +344,18 @@ jobs:
             "${PREFIX}/text-model-service:${TAG}"
           docker run -d \
             --name naming-check-backend \
+            --label co.elastic.logs/enabled=true \
+            --label co.elastic.logs/json.message_key=log \
+            --label co.elastic.logs/json.keys_under_root=true \
             --network naming-check-net \
             --restart unless-stopped \
             --env-file "${REMOTE_APP_DIR}/.env.runtime" \
             -p "${HOST_BIND_PORT}:8000" \
             "${PREFIX}/naming-check-backend:${TAG}"
+          if docker ps --format '{{.Names}}' | grep -qx 'filebeat'; then
+            docker restart filebeat
+            echo "Filebeat restarted to pick up application containers."
+          fi
           echo "Containers started."
           docker image prune -f --filter until=24h >/dev/null 2>&1 || true
           EOS
