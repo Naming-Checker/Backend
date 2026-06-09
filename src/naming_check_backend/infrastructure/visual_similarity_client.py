@@ -59,7 +59,7 @@ async def forward_logo_similarity_search(
             extra={
                 "upstream_url": url,
                 "upstream_status": 504,
-                "filename": safe_name,
+                "upload_filename": safe_name,
                 "top_k": top_k,
             },
         )
@@ -70,13 +70,11 @@ async def forward_logo_similarity_search(
             extra={
                 "upstream_url": url,
                 "upstream_status": 502,
-                "filename": safe_name,
+                "upload_filename": safe_name,
                 "top_k": top_k,
             },
         )
-        raise VisualSimilarityUpstreamError(
-            502, f"Visual model service unreachable: {exc!s}"
-        ) from exc
+        raise VisualSimilarityUpstreamError(502, f"Visual model service unreachable: {exc!s}") from exc
 
     if response.status_code == 200:
         payload: dict[str, Any] = response.json()
@@ -88,7 +86,7 @@ async def forward_logo_similarity_search(
                 "upstream_url": url,
                 "upstream_status": 200,
                 "upstream_duration_ms": round((time.perf_counter() - started) * 1000, 2),
-                "filename": safe_name,
+                "upload_filename": safe_name,
                 "content_length": len(file_bytes),
                 "top_k": top_k,
                 "match_count": match_count,
@@ -111,7 +109,7 @@ async def forward_logo_similarity_search(
             "upstream_url": url,
             "upstream_status": response.status_code,
             "upstream_duration_ms": round((time.perf_counter() - started) * 1000, 2),
-            "filename": safe_name,
+            "upload_filename": safe_name,
             "top_k": top_k,
         },
     )
@@ -152,9 +150,7 @@ async def fetch_logo_preview(
             "visual upstream unreachable",
             extra={"upstream_url": url, "upstream_status": 502},
         )
-        raise VisualSimilarityUpstreamError(
-            502, f"Visual model service unreachable: {exc!s}"
-        ) from exc
+        raise VisualSimilarityUpstreamError(502, f"Visual model service unreachable: {exc!s}") from exc
 
     if response.status_code == 200:
         media_type = response.headers.get("content-type", "application/octet-stream")

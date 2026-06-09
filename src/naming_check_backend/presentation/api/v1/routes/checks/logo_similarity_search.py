@@ -57,7 +57,7 @@ async def search_similar_logos(
         logger.info(
             "logo similarity search completed",
             extra={
-                "filename": filename,
+                "upload_filename": filename,
                 "content_length": len(body),
                 "top_k": k,
                 "match_count": len(result.matches),

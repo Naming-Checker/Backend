@@ -20,9 +20,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "@timestamp": (
-                datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-            ),
+            "@timestamp": (datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")),
             "level": record.levelname,
             "service": self._service,
             "env": self._env,
@@ -42,7 +40,7 @@ class JsonFormatter(logging.Formatter):
             "upstream_status",
             "upstream_url",
             "upstream_duration_ms",
-            "filename",
+            "upload_filename",
             "content_length",
             "top_k",
             "query_length",
