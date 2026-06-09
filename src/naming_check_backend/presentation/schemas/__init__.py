@@ -1,7 +1,11 @@
 """API schemas."""
 
 from naming_check_backend.presentation.schemas.contracts import (
+    CollectedItem,
+    CollectedSourceBatch,
     DeliveryChannel,
+    DirectCollectRequest,
+    DirectCollectResponse,
     ErrorCode,
     ErrorContext,
     ErrorDetail,
@@ -35,6 +39,12 @@ __all__ = [
     "Stage2StatusInfo",
     "Stage2WebhookRequest",
     "Stage2WebhookResponse",
+    "CollectedItem",
+    "CollectedSourceBatch",
+    "DirectCollectRequest",
+    "DirectCollectResponse",
+    "TextInfringementRequest",
+    "TextInfringementResponse",
     "TextSimilarityMatch",
     "TextSimilaritySearchRequest",
     "TextSimilaritySearchResponse",
