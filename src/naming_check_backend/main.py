@@ -1,8 +1,19 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from naming_check_backend.presentation.api.router import api_router
+from naming_check_backend.presentation.middleware import RequestLoggingMiddleware
+from naming_check_backend.shared.json_logging import configure_json_logging
 from naming_check_backend.shared.settings import settings
+
+configure_json_logging(
+    service_name="naming-check-backend",
+    env=settings.app_env,
+    level=settings.log_level,
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.app_name)
 
@@ -21,4 +32,13 @@ if allowed_origins:
         allow_headers=_parse_csv(settings.cors_allow_headers) or ["*"],
     )
 
+app.add_middleware(RequestLoggingMiddleware)
 app.include_router(api_router)
+
+
+@app.on_event("startup")
+def log_startup() -> None:
+    logger.info(
+        "application started",
+        extra={"env": settings.app_env, "log_level": settings.log_level},
+    )

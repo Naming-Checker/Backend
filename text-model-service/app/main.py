@@ -10,8 +10,14 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.engine import TextSimilarityEngine
+from app.json_logging import configure_json_logging
+from app.request_logging import RequestLoggingMiddleware
 
-logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+configure_json_logging(
+    service_name="text-model-service",
+    env=os.environ.get("APP_ENV", "production"),
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+)
 logger = logging.getLogger(__name__)
 
 _engine: TextSimilarityEngine | None = None
@@ -26,10 +32,10 @@ def _sync_load_engine() -> TextSimilarityEngine | None:
             encode_batch_size=settings.encode_batch_size,
             max_length=settings.max_length,
         )
-        logger.info("Text similarity engine ready.")
+        logger.info("text similarity engine ready")
         return engine
     except FileNotFoundError as exc:
-        logger.warning("Text similarity engine not loaded: %s", exc)
+        logger.warning("text similarity engine not loaded", extra={"error": str(exc)})
         return None
     except Exception:
         logger.exception("Failed to initialize text similarity engine")
@@ -57,6 +63,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Text model service", version="0.1.0", lifespan=lifespan)
+app.add_middleware(RequestLoggingMiddleware)
 
 
 class HealthResponse(BaseModel):
@@ -116,4 +123,13 @@ def similarity(payload: SimilarityRequest) -> SimilarityResponse:
         matches = engine.search(query=payload.query, mktu_codes=payload.mktu_codes, top_k=k)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    logger.info(
+        "text similarity search completed",
+        extra={
+            "query_length": len(payload.query),
+            "mktu_count": len(payload.mktu_codes),
+            "top_k": k,
+            "match_count": len(matches),
+        },
+    )
     return SimilarityResponse(top_k=len(matches), matches=matches)

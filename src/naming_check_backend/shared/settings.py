@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     app_env: str = "local"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
+    log_level: str = "INFO"
     visualmodel_enabled: bool = False
     visualmodel_similarity_module_path: str = "../VisualModel/src/similarity.py"
     visualmodel_embeddings_path: str = "../VisualModel/models/logos_embedding.pt"

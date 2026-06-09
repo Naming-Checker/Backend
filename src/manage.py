@@ -13,6 +13,7 @@ def run_server() -> None:
         host=settings.app_host,
         port=settings.app_port,
         reload=settings.app_env == "local",
+        access_log=False,
     )
 
 

@@ -8,7 +8,7 @@
 # After this:
 # 1) Copy your GitHub Actions deploy public key to /home/<user>/.ssh/authorized_keys
 # 2) Copy embedding artifacts to /opt/visual-model-models/ (logos_embedding.pt + .csv)
-# 3) Open TCP 22 (SSH) and the backend port (default 8000) in the firewall / cloud SG
+# 3) Open TCP 22 (SSH), backend port (default 8000), and Kibana 5601 in the firewall / cloud SG
 
 set -euo pipefail
 
@@ -40,10 +40,18 @@ usermod -aG docker "$DEPLOY_USER"
 
 install -d -m 755 /opt/naming-check-backend
 install -d -m 755 /opt/visual-model-models
-chown "$DEPLOY_USER:$DEPLOY_USER" /opt/naming-check-backend /opt/visual-model-models
+install -d -m 755 /opt/elk-data
+chown "$DEPLOY_USER:$DEPLOY_USER" /opt/naming-check-backend /opt/visual-model-models /opt/elk-data
+
+if ! grep -q 'vm.max_map_count=262144' /etc/sysctl.d/99-elasticsearch.conf 2>/dev/null; then
+  echo 'vm.max_map_count=262144' > /etc/sysctl.d/99-elasticsearch.conf
+  sysctl -p /etc/sysctl.d/99-elasticsearch.conf
+fi
 
 echo
 echo "Bootstrap complete."
 echo "- Deploy user: $DEPLOY_USER (add SSH key to ~$DEPLOY_USER/.ssh/authorized_keys)"
 echo "- Put models in: /opt/visual-model-models/{logos_embedding.pt,logos_embedding.csv}"
 echo "- GitHub secrets: TEST_STAND_USER=$DEPLOY_USER, TEST_STAND_VISUAL_MODELS_DIR=/opt/visual-model-models"
+echo "- ELK: add TEST_STAND_ELK_ENV_FILE with ELASTIC_PASSWORD=... (see infra/logging/.env.elk.example)"
+echo "- Kibana (after deploy): http://<server-ip>:5601 (login elastic; open TCP 5601 in firewall)"

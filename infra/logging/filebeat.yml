@@ -1,0 +1,55 @@
+filebeat.inputs:
+  - type: filestream
+    id: docker-app-logs
+    enabled: true
+    paths:
+      - /var/lib/docker/containers/*/*-json.log
+    prospector:
+      scanner:
+        symlinks: true
+        fingerprint.enabled: false
+    parsers:
+      - ndjson:
+          target: ""
+          message_key: log
+          overwrite_keys: true
+          add_error_key: true
+
+processors:
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+      match_source: true
+      match_source_index: 5
+  - decode_json_fields:
+      fields: ["log"]
+      target: ""
+      overwrite_keys: true
+      add_error_key: true
+      when:
+        regexp:
+          log: '^\s*\{'
+  - drop_event:
+      when:
+        not:
+          or:
+            - equals:
+                service: naming-check-backend
+            - equals:
+                service: visual-model-service
+            - equals:
+                service: text-model-service
+  - drop_fields:
+      fields: ["log", "stream", "time"]
+      ignore_missing: true
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: elastic
+  password: "${ELASTIC_PASSWORD}"
+  index: "logs-naming-check-%{+yyyy.MM.dd}"
+
+setup.ilm.enabled: false
+setup.template.enabled: false
+
+logging.level: info
+logging.to_stderr: true

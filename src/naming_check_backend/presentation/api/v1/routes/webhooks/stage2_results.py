@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, status
 
 from naming_check_backend.application.use_cases.stage2.webhook_callback_processing import (
@@ -7,6 +9,7 @@ from naming_check_backend.presentation.api.dependencies import COMMON_ERROR_RESP
 from naming_check_backend.presentation.schemas import Stage2WebhookRequest, Stage2WebhookResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 use_case = WebhookCallbackProcessingUseCase()
 
 
@@ -22,6 +25,13 @@ use_case = WebhookCallbackProcessingUseCase()
     ),
 )
 def receive_stage2_result(payload: Stage2WebhookRequest) -> Stage2WebhookResponse:
+    logger.info(
+        "stage2 webhook received",
+        extra={
+            "correlation_id": payload.correlation_id,
+            "partial": payload.partial,
+        },
+    )
     stage2_job = use_case.execute(payload.correlation_id, payload.partial)
     return Stage2WebhookResponse(
         correlation_id=stage2_job.correlation_id,

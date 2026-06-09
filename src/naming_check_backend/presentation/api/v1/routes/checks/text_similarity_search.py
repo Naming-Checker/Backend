@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 
 from naming_check_backend.infrastructure.text_similarity_client import (
@@ -12,6 +14,7 @@ from naming_check_backend.presentation.schemas import (
 from naming_check_backend.shared.settings import settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -47,6 +50,16 @@ async def search_similar_names(
             mktu_codes=payload.mktu_codes,
             top_k=k,
         )
-        return TextSimilaritySearchResponse.model_validate(raw)
+        result = TextSimilaritySearchResponse.model_validate(raw)
+        logger.info(
+            "text similarity search completed",
+            extra={
+                "query_length": len(payload.query),
+                "mktu_count": len(payload.mktu_codes),
+                "top_k": k,
+                "match_count": len(result.matches),
+            },
+        )
+        return result
     except TextSimilarityUpstreamError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
