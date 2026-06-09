@@ -1,0 +1,40 @@
+# Filebeat 8.12+ requires Docker-specific autodiscover config (see elastic/beats#45864).
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      hints.default_config.enabled: false
+      templates:
+        - condition:
+            equals:
+              docker.container.labels.co_elastic_logs_enabled: "true"
+          config:
+            - type: filestream
+              id: "naming-${data.container.id}"
+              paths:
+                - /var/lib/docker/containers/${data.container.id}/*.log
+              prospector:
+                scanner:
+                  symlinks: true
+                  fingerprint.enabled: false
+              parsers:
+                - ndjson:
+                    target: ""
+                    message_key: log
+                    keys_under_root: true
+                    add_error_key: true
+
+processors:
+  - add_docker_metadata: ~
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: elastic
+  password: "${ELASTIC_PASSWORD}"
+  index: "logs-naming-check-%{+yyyy.MM.dd}"
+
+setup.ilm.enabled: false
+setup.template.enabled: false
+
+logging.level: info
+logging.to_stderr: true

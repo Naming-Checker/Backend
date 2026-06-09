@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
+
+from naming_check_backend.shared.json_logging import get_request_id
+
+logger = logging.getLogger(__name__)
+REQUEST_ID_HEADER = "X-Request-ID"
 
 
 class TextSimilarityUpstreamError(Exception):
@@ -30,12 +36,34 @@ async def forward_text_similarity_search(
 
     url = f"{base_url.rstrip('/')}/similarity"
     payload = {"query": query, "mktu_codes": mktu_codes, "top_k": top_k}
+    headers: dict[str, str] = {}
+    req_id = get_request_id()
+    if req_id:
+        headers[REQUEST_ID_HEADER] = req_id
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=headers)
     except httpx.TimeoutException as exc:
+        logger.warning(
+            "text upstream timeout",
+            extra={
+                "upstream_url": url,
+                "upstream_status": 504,
+                "top_k": top_k,
+                "query_length": len(query),
+            },
+        )
         raise TextSimilarityUpstreamError(504, "Text model service request timed out.") from exc
     except httpx.RequestError as exc:
+        logger.warning(
+            "text upstream unreachable",
+            extra={
+                "upstream_url": url,
+                "upstream_status": 502,
+                "top_k": top_k,
+                "query_length": len(query),
+            },
+        )
         raise TextSimilarityUpstreamError(502, f"Text model service unreachable: {exc!s}") from exc
 
     if response.status_code == 200:
@@ -51,6 +79,15 @@ async def forward_text_similarity_search(
     except ValueError:
         pass
 
+    logger.warning(
+        "text upstream error",
+        extra={
+            "upstream_url": url,
+            "upstream_status": response.status_code,
+            "top_k": top_k,
+            "query_length": len(query),
+        },
+    )
     if response.status_code in {400, 422}:
         raise TextSimilarityUpstreamError(response.status_code, detail)
     if response.status_code == 503:

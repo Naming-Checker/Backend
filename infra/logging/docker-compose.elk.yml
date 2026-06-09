@@ -1,0 +1,118 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION:-8.17.0}
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:?ELASTIC_PASSWORD is required}
+      - ES_JAVA_OPTS=${ES_JAVA_OPTS:-"-Xms512m -Xmx512m"}
+      - cluster.name=naming-check-logs
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - naming-check-net
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  elk-setup:
+    image: curlimages/curl:8.5.0
+    container_name: elk-setup
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ES_URL: http://elasticsearch:9200
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      KIBANA_PASSWORD: ${KIBANA_PASSWORD:-${ELASTIC_PASSWORD}}
+    volumes:
+      - ./scripts/setup-elk.sh:/setup-elk.sh:ro
+    networks:
+      - naming-check-net
+    restart: "no"
+    entrypoint: ["/bin/sh", "/setup-elk.sh"]
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION:-8.17.0}
+    container_name: kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      elk-setup:
+        condition: service_completed_successfully
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD:-${ELASTIC_PASSWORD}}
+      - SERVER_PUBLICBASEURL=${KIBANA_PUBLIC_BASE_URL:-http://127.0.0.1:5601}
+      - SERVER_DEFAULTROUTE=/app/discover
+      - XPACK_FLEET_AGENTS_ENABLED=false
+      - TELEMETRY_ENABLED=false
+    ports:
+      - "5601:5601"
+    networks:
+      - naming-check-net
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:5601/api/status | grep -q '\"level\":\"available\"' || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+
+  kibana-setup:
+    image: curlimages/curl:8.5.0
+    container_name: kibana-setup
+    depends_on:
+      kibana:
+        condition: service_healthy
+    environment:
+      KIBANA_URL: http://kibana:5601
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    volumes:
+      - ./scripts/setup-kibana.sh:/setup-kibana.sh:ro
+    networks:
+      - naming-check-net
+    restart: "no"
+    entrypoint: ["/bin/sh", "/setup-kibana.sh"]
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:${STACK_VERSION:-8.17.0}
+    container_name: filebeat
+    user: root
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      elk-setup:
+        condition: service_completed_successfully
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+    networks:
+      - naming-check-net
+    restart: unless-stopped
+
+networks:
+  naming-check-net:
+    external: true
+
+volumes:
+  es-data:

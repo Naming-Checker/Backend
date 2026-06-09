@@ -14,8 +14,14 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.engine import SimilarityEngine
+from app.json_logging import configure_json_logging
+from app.request_logging import RequestLoggingMiddleware
 
-logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+configure_json_logging(
+    service_name="visual-model-service",
+    env=os.environ.get("APP_ENV", "production"),
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+)
 logger = logging.getLogger(__name__)
 
 _engine: SimilarityEngine | None = None
@@ -59,6 +65,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Visual model service", version="0.1.0", lifespan=lifespan)
+app.add_middleware(RequestLoggingMiddleware)
 _assets_root = Path(settings.assets_root).resolve()
 
 
