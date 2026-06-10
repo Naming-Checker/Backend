@@ -294,6 +294,9 @@ jobs:
           if [ -n "${GHCR_PULL_TOKEN:-}" ] && [ -n "${GHCR_PULL_USER:-}" ]; then
             printf '%s\n' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_PULL_USER" --password-stdin
           fi
+          echo "Pruning unused Docker images to free disk before pull..."
+          docker image prune -af || true
+          docker builder prune -af || true
           pull_with_retry() {
             image="$1"
             attempts="${2:-6}"

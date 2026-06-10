@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from playwright.async_api import async_playwright
-
 from naming_check_backend.infrastructure.collectors.search_provider import TextSearchProvider
 from naming_check_backend.shared.resources import Resource
 
@@ -27,6 +25,15 @@ class ExternalSourceCollector:
         sources = [s for s in source_batch] if source_batch else [Resource.YANDEX.value]
 
         results: list[dict[str, Any]] = []
+
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError as exc:
+            logger.error(
+                "Playwright is not installed (browser binaries missing). "
+                "Rebuild image with INSTALL_PLAYWRIGHT_BROWSERS=true or run playwright install."
+            )
+            raise RuntimeError("Playwright is not available in this container.") from exc
 
         alias_map: dict[str, Resource] = {
             Resource.YANDEX.value: Resource.YANDEX,
