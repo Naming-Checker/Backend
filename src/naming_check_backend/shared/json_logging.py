@@ -20,9 +20,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "@timestamp": (
-                datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-            ),
+            "@timestamp": (datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")),
             "level": record.levelname,
             "service": self._service,
             "env": self._env,
@@ -41,10 +39,20 @@ class JsonFormatter(logging.Formatter):
             "client_ip",
             "upstream_status",
             "upstream_url",
-            "filename",
+            "upstream_duration_ms",
+            "upload_filename",
             "content_length",
             "top_k",
             "query_length",
+            "match_count",
+            "mktu_count",
+            "correlation_id",
+            "partial",
+            "logo_path",
+            "error",
+            "temp_path",
+            "env",
+            "log_level",
         ):
             if hasattr(record, key):
                 value = getattr(record, key)

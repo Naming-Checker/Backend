@@ -95,6 +95,7 @@ services:
     image: docker.elastic.co/beats/filebeat:${STACK_VERSION:-8.17.0}
     container_name: filebeat
     user: root
+    command: ["-e", "--strict.perms=false", "-c", "/usr/share/filebeat/filebeat.yml"]
     depends_on:
       elasticsearch:
         condition: service_healthy

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any
 
 import httpx
@@ -43,6 +44,7 @@ async def forward_logo_similarity_search(
     if req_id:
         headers[REQUEST_ID_HEADER] = req_id
 
+    started = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(
@@ -57,7 +59,7 @@ async def forward_logo_similarity_search(
             extra={
                 "upstream_url": url,
                 "upstream_status": 504,
-                "filename": safe_name,
+                "upload_filename": safe_name,
                 "top_k": top_k,
             },
         )
@@ -68,16 +70,28 @@ async def forward_logo_similarity_search(
             extra={
                 "upstream_url": url,
                 "upstream_status": 502,
-                "filename": safe_name,
+                "upload_filename": safe_name,
                 "top_k": top_k,
             },
         )
-        raise VisualSimilarityUpstreamError(
-            502, f"Visual model service unreachable: {exc!s}"
-        ) from exc
+        raise VisualSimilarityUpstreamError(502, f"Visual model service unreachable: {exc!s}") from exc
 
     if response.status_code == 200:
         payload: dict[str, Any] = response.json()
+        matches = payload.get("matches")
+        match_count = len(matches) if isinstance(matches, list) else None
+        logger.info(
+            "visual upstream success",
+            extra={
+                "upstream_url": url,
+                "upstream_status": 200,
+                "upstream_duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                "upload_filename": safe_name,
+                "content_length": len(file_bytes),
+                "top_k": top_k,
+                "match_count": match_count,
+            },
+        )
         return payload
 
     detail = response.text
@@ -94,7 +108,8 @@ async def forward_logo_similarity_search(
         extra={
             "upstream_url": url,
             "upstream_status": response.status_code,
-            "filename": safe_name,
+            "upstream_duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            "upload_filename": safe_name,
             "top_k": top_k,
         },
     )
@@ -120,6 +135,7 @@ async def fetch_logo_preview(
     req_id = get_request_id()
     if req_id:
         headers[REQUEST_ID_HEADER] = req_id
+    started = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.get(url, params={"logo_path": logo_path}, headers=headers)
@@ -134,17 +150,30 @@ async def fetch_logo_preview(
             "visual upstream unreachable",
             extra={"upstream_url": url, "upstream_status": 502},
         )
-        raise VisualSimilarityUpstreamError(
-            502, f"Visual model service unreachable: {exc!s}"
-        ) from exc
+        raise VisualSimilarityUpstreamError(502, f"Visual model service unreachable: {exc!s}") from exc
 
     if response.status_code == 200:
         media_type = response.headers.get("content-type", "application/octet-stream")
+        logger.info(
+            "visual asset fetch success",
+            extra={
+                "upstream_url": url,
+                "upstream_status": 200,
+                "upstream_duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                "logo_path": logo_path,
+                "content_length": len(response.content),
+            },
+        )
         return response.content, media_type
 
     logger.warning(
         "visual upstream error",
-        extra={"upstream_url": url, "upstream_status": response.status_code},
+        extra={
+            "upstream_url": url,
+            "upstream_status": response.status_code,
+            "upstream_duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            "logo_path": logo_path,
+        },
     )
     if response.status_code in {400, 404}:
         raise VisualSimilarityUpstreamError(response.status_code, response.text)

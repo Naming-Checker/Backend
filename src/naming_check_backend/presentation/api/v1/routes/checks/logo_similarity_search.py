@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
@@ -12,6 +13,7 @@ from naming_check_backend.presentation.schemas import LogoSimilaritySearchRespon
 from naming_check_backend.shared.settings import settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -42,15 +44,26 @@ async def search_similar_logos(
     k = min(top_k, settings.visual_model_service_max_top_k)
     body = await file.read()
     try:
+        filename = file.filename or "upload.png"
         raw = await forward_logo_similarity_search(
             base_url=settings.visual_model_service_base_url,
             timeout_seconds=settings.visual_model_service_timeout_seconds,
             file_bytes=body,
-            filename=file.filename or "upload.png",
+            filename=filename,
             media_type=file.content_type,
             top_k=k,
         )
-        return LogoSimilaritySearchResponse.model_validate(raw)
+        result = LogoSimilaritySearchResponse.model_validate(raw)
+        logger.info(
+            "logo similarity search completed",
+            extra={
+                "upload_filename": filename,
+                "content_length": len(body),
+                "top_k": k,
+                "match_count": len(result.matches),
+            },
+        )
+        return result
     except VisualSimilarityUpstreamError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
@@ -77,6 +90,13 @@ async def preview_logo(logo_path: Annotated[str, Query(min_length=1)]) -> Respon
             base_url=settings.visual_model_service_base_url,
             timeout_seconds=settings.visual_model_service_timeout_seconds,
             logo_path=logo_path,
+        )
+        logger.info(
+            "logo preview fetched",
+            extra={
+                "logo_path": logo_path,
+                "content_length": len(content),
+            },
         )
         return Response(content=content, media_type=media_type)
     except VisualSimilarityUpstreamError as exc:

@@ -35,6 +35,13 @@ use_case = WebhookCallbackProcessingUseCase()
     ),
 )
 async def receive_stage2_result(payload: Stage2WebhookRequest) -> Stage2WebhookResponse:
+    logger.info(
+        "stage2 webhook received",
+        extra={
+            "correlation_id": payload.correlation_id,
+            "partial": payload.partial,
+        },
+    )
     stage2_job = use_case.execute(payload.correlation_id, payload.partial)
 
     try:

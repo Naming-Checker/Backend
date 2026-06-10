@@ -34,10 +34,10 @@ def _sync_load_engine() -> SimilarityEngine | None:
             embeddings_pt_path=settings.embeddings_pt_path,
             embeddings_csv_path=settings.embeddings_csv_path,
         )
-        logger.info("Similarity engine ready.")
+        logger.info("similarity engine ready")
         return eng
     except FileNotFoundError as exc:
-        logger.warning("Similarity engine not loaded: %s", exc)
+        logger.warning("similarity engine not loaded", extra={"error": str(exc)})
         return None
     except Exception:
         logger.exception("Failed to initialize similarity engine")
@@ -146,13 +146,21 @@ def similarity(
         matches = [
             MatchItem(logo_path=p, cosine_similarity=cos, similarity_percent=pct) for p, cos, pct in rows
         ]
+        logger.info(
+            "logo similarity search completed",
+            extra={
+                "content_length": len(data),
+                "top_k": k,
+                "match_count": len(matches),
+            },
+        )
         return SimilarityResponse(top_k=len(matches), matches=matches)
     finally:
         if tmp_path is not None:
             try:
                 os.unlink(tmp_path)
             except OSError:
-                logger.warning("Could not delete temp file %s", tmp_path)
+                logger.warning("could not delete temp file", extra={"temp_path": tmp_path})
 
 
 @app.get("/asset")
@@ -160,4 +168,5 @@ def get_logo_asset(
     logo_path: Annotated[str, Query(description="Relative path from assets_root, e.g. data/logos/a.jpg")],
 ) -> FileResponse:
     path = resolve_logo_asset_path(logo_path)
+    logger.info("logo asset served", extra={"logo_path": logo_path})
     return FileResponse(path)

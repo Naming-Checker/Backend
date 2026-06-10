@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,6 +13,7 @@ configure_json_logging(
     env=settings.app_env,
     level=settings.log_level,
 )
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.app_name)
 
@@ -31,3 +34,11 @@ if allowed_origins:
 
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(api_router)
+
+
+@app.on_event("startup")
+def log_startup() -> None:
+    logger.info(
+        "application started",
+        extra={"env": settings.app_env, "log_level": settings.log_level},
+    )

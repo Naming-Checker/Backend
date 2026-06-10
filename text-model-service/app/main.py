@@ -32,10 +32,10 @@ def _sync_load_engine() -> TextSimilarityEngine | None:
             encode_batch_size=settings.encode_batch_size,
             max_length=settings.max_length,
         )
-        logger.info("Text similarity engine ready.")
+        logger.info("text similarity engine ready")
         return engine
     except FileNotFoundError as exc:
-        logger.warning("Text similarity engine not loaded: %s", exc)
+        logger.warning("text similarity engine not loaded", extra={"error": str(exc)})
         return None
     except Exception:
         logger.exception("Failed to initialize text similarity engine")
@@ -123,4 +123,13 @@ def similarity(payload: SimilarityRequest) -> SimilarityResponse:
         matches = engine.search(query=payload.query, mktu_codes=payload.mktu_codes, top_k=k)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    logger.info(
+        "text similarity search completed",
+        extra={
+            "query_length": len(payload.query),
+            "mktu_count": len(payload.mktu_codes),
+            "top_k": k,
+            "match_count": len(matches),
+        },
+    )
     return SimilarityResponse(top_k=len(matches), matches=matches)

@@ -39,6 +39,10 @@ class JsonFormatter(logging.Formatter):
             "client_ip",
             "content_length",
             "top_k",
+            "match_count",
+            "logo_path",
+            "error",
+            "temp_path",
         ):
             if hasattr(record, key):
                 value = getattr(record, key)
