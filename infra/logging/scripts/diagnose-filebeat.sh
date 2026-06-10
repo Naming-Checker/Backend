@@ -27,7 +27,14 @@ done
 echo
 echo "=== APM Server ==="
 if docker ps --format '{{.Names}}' | grep -qx 'apm-server'; then
-  curl -fsS http://127.0.0.1:8200/ 2>/dev/null && echo "apm-server: OK" || echo "apm-server: not responding on :8200"
+  if curl -fsS http://127.0.0.1:8200/ >/dev/null 2>&1; then
+    echo "apm-server: OK"
+    if docker logs apm-server --tail 200 2>&1 | grep -q 'status_code=401'; then
+      echo "apm-server: WARNING — ES auth errors (401). Recreate with run-apm-server.sh entrypoint."
+    fi
+  else
+    echo "apm-server: not responding on :8200"
+  fi
 else
   echo "apm-server container not running"
 fi

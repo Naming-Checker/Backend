@@ -120,14 +120,10 @@ services:
       elk-setup:
         condition: service_completed_successfully
     environment:
-      - output.elasticsearch.hosts=["http://elasticsearch:9200"]
-      - output.elasticsearch.username=elastic
-      - output.elasticsearch.password=${ELASTIC_PASSWORD}
-      - apm-server.host=0.0.0.0:8200
-      - apm-server.auth.anonymous.enabled=true
-      - apm-server.auth.anonymous.allow_agent=["*"]
-      - apm-server.auth.anonymous.allow_service=["*"]
-      - logging.level=info
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    volumes:
+      - ./scripts/run-apm-server.sh:/run-apm-server.sh:ro
+    entrypoint: ["/bin/sh", "/run-apm-server.sh"]
     networks:
       - naming-check-net
     ports:
