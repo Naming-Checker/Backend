@@ -63,9 +63,7 @@ def configure_apm(app: FastAPI, *, service_name: str) -> None:
             "SERVICE_NAME": os.environ.get("ELASTIC_APM_SERVICE_NAME", service_name),
             "SERVER_URL": server_url,
             "ENVIRONMENT": environment,
-            "TRANSACTION_SAMPLE_RATE": float(
-                os.environ.get("ELASTIC_APM_TRANSACTION_SAMPLE_RATE", "1.0")
-            ),
+            "TRANSACTION_SAMPLE_RATE": float(os.environ.get("ELASTIC_APM_TRANSACTION_SAMPLE_RATE", "1.0")),
             "CAPTURE_BODY": os.environ.get("ELASTIC_APM_CAPTURE_BODY", "errors"),
             "USE_ELASTIC_TRACEPARENT_HEADER": True,
             "ENABLED": True,
@@ -74,5 +72,5 @@ def configure_apm(app: FastAPI, *, service_name: str) -> None:
     if client is None:
         return
 
-    app.add_middleware(ElasticAPM, client=client)
+    app.add_middleware(ElasticAPM, client=client)  # type: ignore[arg-type]
     logger.info("Elastic APM enabled", extra={"apm_server_url": server_url})
