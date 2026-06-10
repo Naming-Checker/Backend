@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from app.apm import configure_apm
 from app.config import settings
 from app.engine import TextSimilarityEngine
 from app.json_logging import configure_json_logging
@@ -133,3 +134,6 @@ def similarity(payload: SimilarityRequest) -> SimilarityResponse:
         },
     )
     return SimilarityResponse(top_k=len(matches), matches=matches)
+
+
+configure_apm(app, service_name="text-model-service")

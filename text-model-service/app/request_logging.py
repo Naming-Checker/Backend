@@ -11,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.apm import label_current_transaction
 from app.json_logging import request_id_ctx
 
 logger = logging.getLogger("text_model_service.http")
@@ -28,6 +29,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         token = request_id_ctx.set(request_id)
         start = time.perf_counter()
         client_ip = request.client.host if request.client else None
+        label_current_transaction(
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            client_ip=client_ip,
+        )
         status_code = 500
         try:
             response = await call_next(request)

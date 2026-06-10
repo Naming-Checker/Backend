@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from naming_check_backend.presentation.api.router import api_router
 from naming_check_backend.presentation.middleware import RequestLoggingMiddleware
+from naming_check_backend.shared.apm import configure_apm
 from naming_check_backend.shared.json_logging import configure_json_logging
 from naming_check_backend.shared.settings import settings
 
@@ -42,3 +43,6 @@ def log_startup() -> None:
         "application started",
         extra={"env": settings.app_env, "log_level": settings.log_level},
     )
+
+
+configure_apm(app, service_name="naming-check-backend")

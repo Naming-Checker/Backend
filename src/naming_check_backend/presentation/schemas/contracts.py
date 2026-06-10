@@ -482,7 +482,6 @@ class DirectCollectRequest(BaseModel):
     )
 
 
-
 class DirectCollectResponse(BaseModel):
     results: list[CollectedSourceBatch] = Field(default_factory=list)
 

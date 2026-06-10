@@ -85,4 +85,39 @@ run_curl PUT "/_index_template/logs-naming-check" '{
   "priority": 200
 }'
 
+echo "Applying ILM policy apm-1day..."
+run_curl PUT "/_ilm/policy/apm-1day" '{
+  "policy": {
+    "phases": {
+      "hot": {
+        "actions": {
+          "rollover": {
+            "max_age": "1d",
+            "max_primary_shard_size": "5gb"
+          }
+        }
+      },
+      "delete": {
+        "min_age": "1d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}'
+
+for pattern in traces-apm metrics-apm logs-apm; do
+  echo "Applying index template ${pattern}-1day..."
+  run_curl PUT "/_index_template/${pattern}-1day" "{
+    \"index_patterns\": [\"${pattern}-*\"],
+    \"template\": {
+      \"settings\": {
+        \"index.lifecycle.name\": \"apm-1day\"
+      }
+    },
+    \"priority\": 150
+  }"
+done
+
 echo "ELK setup complete."
