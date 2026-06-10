@@ -111,6 +111,39 @@ services:
       - naming-check-net
     restart: unless-stopped
 
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:${STACK_VERSION:-8.17.0}
+    container_name: apm-server
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      elk-setup:
+        condition: service_completed_successfully
+    environment:
+      - output.elasticsearch.hosts=["http://elasticsearch:9200"]
+      - output.elasticsearch.username=elastic
+      - output.elasticsearch.password=${ELASTIC_PASSWORD}
+      - apm-server.host=0.0.0.0:8200
+      - apm-server.auth.anonymous.enabled=true
+      - apm-server.auth.anonymous.allow_agent=["*"]
+      - apm-server.auth.anonymous.allow_service=["*"]
+      - logging.level=info
+    networks:
+      - naming-check-net
+    ports:
+      - "127.0.0.1:8200:8200"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:8200/ >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
 networks:
   naming-check-net:
     external: true

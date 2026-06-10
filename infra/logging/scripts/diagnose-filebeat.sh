@@ -25,6 +25,14 @@ for c in naming-check-backend visual-model-service text-model-service; do
 done
 
 echo
+echo "=== APM Server ==="
+if docker ps --format '{{.Names}}' | grep -qx 'apm-server'; then
+  curl -fsS http://127.0.0.1:8200/ 2>/dev/null && echo "apm-server: OK" || echo "apm-server: not responding on :8200"
+else
+  echo "apm-server container not running"
+fi
+
+echo
 echo "=== Filebeat logs (last 40 lines) ==="
 docker logs filebeat --tail 40 2>&1 || echo "filebeat container missing"
 

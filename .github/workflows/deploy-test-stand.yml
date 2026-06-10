@@ -202,6 +202,11 @@ jobs:
           CORS_ALLOW_METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
           CORS_ALLOW_HEADERS=*
           CORS_ALLOW_CREDENTIALS=false
+          ELASTIC_APM_ENABLED=true
+          ELASTIC_APM_SERVER_URL=http://apm-server:8200
+          ELASTIC_APM_SERVICE_NAME=naming-check-backend
+          ELASTIC_APM_ENVIRONMENT=production
+          ELASTIC_APM_TRANSACTION_SAMPLE_RATE=1.0
           $TEST_STAND_ENV_FILE
           EOF
 
@@ -219,6 +224,11 @@ jobs:
           EMBEDDINGS_PT_PATH=/app/models/logos_embedding.pt
           EMBEDDINGS_CSV_PATH=/app/models/logos_embedding.csv
           ASSETS_ROOT=/app/assets
+          ELASTIC_APM_ENABLED=true
+          ELASTIC_APM_SERVER_URL=http://apm-server:8200
+          ELASTIC_APM_SERVICE_NAME=visual-model-service
+          ELASTIC_APM_ENVIRONMENT=production
+          ELASTIC_APM_TRANSACTION_SAMPLE_RATE=1.0
           $TEST_STAND_VISUAL_ENV_FILE
           EOF
 
@@ -236,6 +246,11 @@ jobs:
           EMBEDDINGS_PT_PATH=/app/models/text_embedding.pt
           EMBEDDINGS_CSV_PATH=/app/models/text_embedding.csv
           MODEL_PATH=/app/models/rubert-tiny2
+          ELASTIC_APM_ENABLED=true
+          ELASTIC_APM_SERVER_URL=http://apm-server:8200
+          ELASTIC_APM_SERVICE_NAME=text-model-service
+          ELASTIC_APM_ENVIRONMENT=production
+          ELASTIC_APM_TRANSACTION_SAMPLE_RATE=1.0
           $TEST_STAND_TEXT_ENV_FILE
           EOF
 
@@ -308,6 +323,7 @@ jobs:
             pull_with_retry "docker.elastic.co/elasticsearch/elasticsearch:8.17.0" 6 15
             pull_with_retry "docker.elastic.co/kibana/kibana:8.17.0" 6 15
             pull_with_retry "docker.elastic.co/beats/filebeat:8.17.0" 6 15
+            pull_with_retry "docker.elastic.co/apm/apm-server:8.17.0" 6 15
             docker rm -f elk-setup kibana-setup >/dev/null 2>&1 || true
             docker compose -f "${ELK_DIR}/docker-compose.elk.yml" \
               --env-file "${ELK_DIR}/.env.elk" \
@@ -443,6 +459,23 @@ jobs:
             echo "::error::Text model did not reach health status=ok within ~10m. Often: missing text_embedding.pt/.csv, missing rubert-tiny2 snapshot, or OOM." >&2
             docker logs text-model-service --tail 300 >&2 || true
             exit 1
+          fi
+
+          if docker ps --format '{{.Names}}' | grep -qx 'apm-server'; then
+            ok_apm=0
+            for _ in $(seq 1 24); do
+              if curl -fsS http://127.0.0.1:8200/ >/dev/null 2>&1; then
+                ok_apm=1
+                echo "APM Server status OK."
+                break
+              fi
+              sleep 5
+            done
+            if [[ "${ok_apm}" != 1 ]]; then
+              echo "::error::APM Server did not become available on 127.0.0.1:8200." >&2
+              docker logs apm-server --tail 200 >&2 || true
+              exit 1
+            fi
           fi
 
           if docker ps --format '{{.Names}}' | grep -qx 'kibana'; then

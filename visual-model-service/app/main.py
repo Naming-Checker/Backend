@@ -12,6 +12,7 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from app.apm import configure_apm
 from app.config import settings
 from app.engine import SimilarityEngine
 from app.json_logging import configure_json_logging
@@ -170,3 +171,6 @@ def get_logo_asset(
     path = resolve_logo_asset_path(logo_path)
     logger.info("logo asset served", extra={"logo_path": logo_path})
     return FileResponse(path)
+
+
+configure_apm(app, service_name="visual-model-service")

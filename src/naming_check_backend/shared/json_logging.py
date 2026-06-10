@@ -9,6 +9,8 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
+from naming_check_backend.shared.apm import append_trace_context
+
 request_id_ctx: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
@@ -58,6 +60,7 @@ class JsonFormatter(logging.Formatter):
                 value = getattr(record, key)
                 if value is not None:
                     payload[key] = value
+        append_trace_context(payload)
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False)
