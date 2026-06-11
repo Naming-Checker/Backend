@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, cast
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse, ParseResult
+from urllib.parse import ParseResult, parse_qs, urlencode, urljoin, urlparse
 
 from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
