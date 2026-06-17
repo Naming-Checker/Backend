@@ -41,12 +41,20 @@ processors:
   - drop_fields:
       fields: ["log", "stream", "time"]
       ignore_missing: true
+  - timestamp:
+      field: "@timestamp"
+      layouts:
+        - "2006-01-02T15:04:05.000Z"
+        - "2006-01-02T15:04:05Z"
+      ignore_missing: true
+      ignore_failure: true
 
+# Per-service daily indices: logs-naming-check-backend-2026.06.10, etc.
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
   username: elastic
   password: "${ELASTIC_PASSWORD}"
-  index: "logs-naming-check-%{+yyyy.MM.dd}"
+  index: "logs-%{[service]}-%{+yyyy.MM.dd}"
 
 setup.ilm.enabled: false
 setup.template.enabled: false

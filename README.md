@@ -127,7 +127,7 @@ CORS_ALLOW_CREDENTIALS=false
 На тестовом стенде при деплое поднимаются **Elasticsearch 8.17**, **Kibana** и **Filebeat** (`infra/logging/docker-compose.elk.yml`). Логи приложений — JSON в stdout, retention **1 день**.
 
 - Kibana публикуется на **`http://<TEST_STAND_HOST>:5601`** (логин **`elastic`**, пароль `ELASTIC_PASSWORD`). Откройте TCP **5601** в firewall / security group облака, если UI не открывается снаружи.
-- После деплоя Kibana открывает **Discover** с data view `logs-naming-check-*` (логи backend и sidecars). Сквозная корреляция по `request_id` и `trace.id`.
+- После деплоя Kibana открывает **Discover** с data view `logs-*` (все сервисы) и отдельными view по сервисам. Индексы: `logs-<service>-YYYY.MM.DD` (Filebeat). Saved searches: ошибки, 5xx, медленные запросы.
 - **APM**: Kibana → Observability → APM — транзакции по каждой HTTP-ручке, span'ы вызовов backend → sidecars.
 - Диагностика: `bash infra/logging/scripts/diagnose-filebeat.sh` на сервере.
 - Локально: `bash scripts/start-elk-local.sh` (создаёт `infra/logging/.env.elk.local` из example).

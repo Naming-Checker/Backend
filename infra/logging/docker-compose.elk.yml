@@ -32,12 +32,14 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    volumes:
+      - ./scripts/setup-elk.sh:/setup-elk.sh:ro
+      - ./templates:/templates:ro
     environment:
       ES_URL: http://elasticsearch:9200
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
       KIBANA_PASSWORD: ${KIBANA_PASSWORD:-${ELASTIC_PASSWORD}}
-    volumes:
-      - ./scripts/setup-elk.sh:/setup-elk.sh:ro
+      TEMPLATE_DIR: /templates
     networks:
       - naming-check-net
     restart: "no"
