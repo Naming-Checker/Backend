@@ -1,0 +1,88 @@
+{
+  "index_patterns": ["logs-*-*-*"],
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "logs-1day",
+      "index.number_of_shards": 1,
+      "index.number_of_replicas": 0
+    },
+    "mappings": {
+      "dynamic": "true",
+      "dynamic_templates": [
+        {
+          "strings_as_keywords": {
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword",
+              "ignore_above": 1024
+            }
+          }
+        }
+      ],
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "level": { "type": "keyword" },
+        "service": { "type": "keyword" },
+        "env": { "type": "keyword" },
+        "message": {
+          "type": "text",
+          "fields": {
+            "keyword": { "type": "keyword", "ignore_above": 2048 }
+          }
+        },
+        "logger": { "type": "keyword" },
+        "request_id": { "type": "keyword" },
+        "method": { "type": "keyword" },
+        "path": { "type": "keyword" },
+        "status_code": { "type": "integer" },
+        "duration_ms": { "type": "float" },
+        "client_ip": { "type": "ip", "ignore_malformed": true },
+        "upstream_status": { "type": "integer" },
+        "upstream_url": { "type": "keyword" },
+        "upstream_duration_ms": { "type": "float" },
+        "upload_filename": { "type": "keyword" },
+        "content_length": { "type": "long" },
+        "top_k": { "type": "integer" },
+        "query_length": { "type": "integer" },
+        "match_count": { "type": "integer" },
+        "mktu_count": { "type": "integer" },
+        "correlation_id": { "type": "keyword" },
+        "partial": { "type": "boolean" },
+        "logo_path": { "type": "keyword" },
+        "error": { "type": "keyword" },
+        "temp_path": { "type": "keyword" },
+        "log_level": { "type": "keyword" },
+        "trace.id": { "type": "keyword" },
+        "transaction.id": { "type": "keyword" },
+        "exception": { "type": "text" },
+        "agent": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "type": { "type": "keyword" },
+            "version": { "type": "keyword" }
+          }
+        },
+        "host": {
+          "properties": {
+            "name": { "type": "keyword" }
+          }
+        },
+        "ecs": {
+          "properties": {
+            "version": { "type": "keyword" }
+          }
+        },
+        "input": {
+          "properties": {
+            "type": { "type": "keyword" }
+          }
+        }
+      }
+    }
+  },
+  "priority": 200,
+  "composed_of": [],
+  "_meta": {
+    "description": "Structured application logs from naming-check-backend and ML sidecars (Filebeat)"
+  }
+}

@@ -44,12 +44,17 @@ echo "=== Filebeat logs (last 40 lines) ==="
 docker logs filebeat --tail 40 2>&1 || echo "filebeat container missing"
 
 echo
-echo "=== Elasticsearch indices ==="
+echo "=== Elasticsearch log indices ==="
 if [[ -n "${ELASTIC_PASSWORD}" ]]; then
   docker exec elasticsearch curl -fsS -u "elastic:${ELASTIC_PASSWORD}" \
-    "http://localhost:9200/_cat/indices/logs-naming-check-*?v" 2>/dev/null || echo "(no logs-naming-check indices)"
-  docker exec elasticsearch curl -fsS -u "elastic:${ELASTIC_PASSWORD}" \
-    "http://localhost:9200/logs-naming-check-*/_count" 2>/dev/null || true
+    "http://localhost:9200/_cat/indices/logs-*?v&s=index" 2>/dev/null || echo "(no logs-* indices)"
+  echo
+  echo "Document counts by index pattern:"
+  for pattern in "logs-naming-check-backend-*" "logs-visual-model-service-*" "logs-text-model-service-*" "logs-naming-check-20*"; do
+    count="$(docker exec elasticsearch curl -fsS -u "elastic:${ELASTIC_PASSWORD}" \
+      "http://localhost:9200/${pattern}/_count" 2>/dev/null | grep -o '"count":[0-9]*' | cut -d: -f2 || echo "?")"
+    echo "  ${pattern}: ${count}"
+  done
 else
   echo "Set ELASTIC_PASSWORD or .env.elk to query ES."
 fi
