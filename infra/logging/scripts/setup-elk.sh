@@ -13,11 +13,15 @@ TEMPLATE_FILE="${TEMPLATE_DIR}/logs-index-template.json"
 if [[ -f "${ENV_FILE}" ]]; then
   ELASTIC_PASSWORD="$(grep -E '^ELASTIC_PASSWORD=' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"')"
   KIBANA_PASSWORD="$(grep -E '^KIBANA_PASSWORD=' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"')"
+  LOG_RETENTION_DAYS="$(grep -E '^LOG_RETENTION_DAYS=' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"')"
+  APM_RETENTION_DAYS="$(grep -E '^APM_RETENTION_DAYS=' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"')"
 fi
 
 ELASTIC_PASSWORD="${ELASTIC_PASSWORD:-}"
 KIBANA_PASSWORD="${KIBANA_PASSWORD:-${ELASTIC_PASSWORD:-}}"
 ES_URL="${ES_URL:-http://elasticsearch:9200}"
+LOG_RETENTION_DAYS="${LOG_RETENTION_DAYS:-1}"
+APM_RETENTION_DAYS="${APM_RETENTION_DAYS:-1}"
 
 if [[ -z "${ELASTIC_PASSWORD}" ]]; then
   echo "ELASTIC_PASSWORD is not set (expected in ${ENV_FILE} or environment)." >&2
@@ -80,23 +84,23 @@ run_curl_file() {
 echo "Setting kibana_system password..."
 run_curl POST "/_security/user/kibana_system/_password" "{\"password\":\"${KIBANA_PASSWORD}\"}"
 
-echo "Applying ILM policy logs-1day (delete after 24h)..."
-run_curl PUT "/_ilm/policy/logs-1day" '{
-  "policy": {
-    "phases": {
-      "hot": {
-        "min_age": "0ms",
-        "actions": {}
+echo "Applying ILM policy logs-1day (delete after ${LOG_RETENTION_DAYS}d)..."
+run_curl PUT "/_ilm/policy/logs-1day" "{
+  \"policy\": {
+    \"phases\": {
+      \"hot\": {
+        \"min_age\": \"0ms\",
+        \"actions\": {}
       },
-      "delete": {
-        "min_age": "1d",
-        "actions": {
-          "delete": {}
+      \"delete\": {
+        \"min_age\": \"${LOG_RETENTION_DAYS}d\",
+        \"actions\": {
+          \"delete\": {}
         }
       }
     }
   }
-}'
+}"
 
 echo "Removing obsolete index template logs-naming-check (replaced by logs-app)..."
 run_curl DELETE "/_index_template/logs-naming-check" || true
@@ -118,23 +122,23 @@ run_curl PUT "/_index_template/logs-naming-check-legacy" '{
   "priority": 50
 }'
 
-echo "Applying ILM policy apm-1day..."
-run_curl PUT "/_ilm/policy/apm-1day" '{
-  "policy": {
-    "phases": {
-      "hot": {
-        "min_age": "0ms",
-        "actions": {}
+echo "Applying ILM policy apm-1day (delete after ${APM_RETENTION_DAYS}d)..."
+run_curl PUT "/_ilm/policy/apm-1day" "{
+  \"policy\": {
+    \"phases\": {
+      \"hot\": {
+        \"min_age\": \"0ms\",
+        \"actions\": {}
       },
-      "delete": {
-        "min_age": "1d",
-        "actions": {
-          "delete": {}
+      \"delete\": {
+        \"min_age\": \"${APM_RETENTION_DAYS}d\",
+        \"actions\": {
+          \"delete\": {}
         }
       }
     }
   }
-}'
+}"
 
 for pattern in traces-apm metrics-apm logs-apm; do
   echo "Applying index template ${pattern}-1day..."
@@ -148,5 +152,16 @@ for pattern in traces-apm metrics-apm logs-apm; do
     \"priority\": 150
   }"
 done
+
+echo "Running index maintenance (attach ILM + purge stale indices)..."
+if [ -x "${SCRIPT_DIR}/maintain-indices.sh" ]; then
+  ELASTIC_PASSWORD="${ELASTIC_PASSWORD}" \
+  ES_URL="${ES_URL}" \
+  LOG_RETENTION_DAYS="${LOG_RETENTION_DAYS}" \
+  APM_RETENTION_DAYS="${APM_RETENTION_DAYS}" \
+  "${SCRIPT_DIR}/maintain-indices.sh"
+else
+  echo "maintain-indices.sh not found, skipping maintenance step." >&2
+fi
 
 echo "ELK setup complete."

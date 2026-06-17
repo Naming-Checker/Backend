@@ -20,7 +20,7 @@ docker compose -f "${LOGGING_DIR}/docker-compose.elk.yml" \
   up -d
 
 echo
-echo "ELK stack is starting (elk-setup configures kibana_system + ILM before Kibana starts)."
+echo "ELK stack is starting (elk-setup configures kibana_system + ILM + index cleanup before Kibana starts)."
 echo "- Kibana UI: http://127.0.0.1:5601 (login: elastic, password ELASTIC_PASSWORD from ${ENV_FILE})"
 echo "- APM traces: Kibana → Observability → APM (after app containers send data to apm-server:8200)"
 echo "- Ensure app containers use network naming-check-net so Filebeat collects their logs."
