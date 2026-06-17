@@ -33,17 +33,40 @@ services:
       elasticsearch:
         condition: service_healthy
     volumes:
-      - ./scripts/setup-elk.sh:/setup-elk.sh:ro
+      - ./scripts:/scripts:ro
       - ./templates:/templates:ro
     environment:
       ES_URL: http://elasticsearch:9200
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
       KIBANA_PASSWORD: ${KIBANA_PASSWORD:-${ELASTIC_PASSWORD}}
       TEMPLATE_DIR: /templates
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-1}
+      APM_RETENTION_DAYS: ${APM_RETENTION_DAYS:-1}
     networks:
       - naming-check-net
     restart: "no"
-    entrypoint: ["/bin/sh", "/setup-elk.sh"]
+    entrypoint: ["/bin/sh", "/scripts/setup-elk.sh"]
+
+  elk-maintenance:
+    image: curlimages/curl:8.5.0
+    container_name: elk-maintenance
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      elk-setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./scripts:/scripts:ro
+    environment:
+      ES_URL: http://elasticsearch:9200
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-1}
+      APM_RETENTION_DAYS: ${APM_RETENTION_DAYS:-1}
+      MAINTENANCE_INTERVAL_SEC: ${MAINTENANCE_INTERVAL_SEC:-86400}
+    networks:
+      - naming-check-net
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/scripts/run-maintenance-loop.sh"]
 
   kibana:
     image: docker.elastic.co/kibana/kibana:${STACK_VERSION:-8.17.0}
