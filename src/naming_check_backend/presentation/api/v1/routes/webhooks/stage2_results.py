@@ -24,7 +24,7 @@ use_case = WebhookCallbackProcessingUseCase()
 
 
 @router.post(
-    "",
+    "/",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=Stage2WebhookResponse,
     responses=COMMON_ERROR_RESPONSES,

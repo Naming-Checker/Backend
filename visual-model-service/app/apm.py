@@ -51,9 +51,42 @@ def configure_apm(app: FastAPI, *, service_name: str) -> None:
 
     try:
         from elasticapm.contrib.starlette import ElasticAPM, make_apm_client
+        from starlette.routing import Match, Mount
     except ImportError:
         logger.warning("elastic-apm is not installed; tracing disabled")
         return
+
+    class SafeElasticAPM(ElasticAPM):
+        """ElasticAPM middleware compatible with FastAPI 0.137+ nested routers."""
+
+        def get_route_name(self, request):  # type: ignore[no-untyped-def]
+            try:
+                return super().get_route_name(request) or request.url.path
+            except AttributeError:
+                return request.url.path
+
+        def _get_route_name(self, scope, routes, route_name=None):  # type: ignore[no-untyped-def]
+            for route in routes:
+                match, child_scope = route.matches(scope)
+                if match == Match.FULL:
+                    route_path = getattr(route, "path", None)
+                    if route_path is None:
+                        return scope.get("path")
+                    route_name = route_path
+                    child_scope = {**scope, **child_scope}
+                    nested_routes = getattr(route, "routes", None)
+                    if isinstance(route, Mount) and nested_routes:
+                        child_route_name = self._get_route_name(
+                            child_scope, nested_routes, route_name
+                        )
+                        if child_route_name is None:
+                            route_name = None
+                        else:
+                            route_name += child_route_name
+                    return route_name
+                if match == Match.PARTIAL and route_name is None:
+                    route_name = getattr(route, "path", None)
+            return route_name
 
     server_url = os.environ.get("ELASTIC_APM_SERVER_URL", "http://apm-server:8200")
     environment = os.environ.get("ELASTIC_APM_ENVIRONMENT") or os.environ.get("APP_ENV", "local")
@@ -73,5 +106,5 @@ def configure_apm(app: FastAPI, *, service_name: str) -> None:
     if client is None:
         return
 
-    app.add_middleware(ElasticAPM, client=client)
+    app.add_middleware(SafeElasticAPM, client=client)
     logger.info("Elastic APM enabled", extra={"apm_server_url": server_url})
