@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: test-stand-dashboards
+    orgId: 1
+    folder: Test Stand
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
+

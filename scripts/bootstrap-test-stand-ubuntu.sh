@@ -8,7 +8,7 @@
 # After this:
 # 1) Copy your GitHub Actions deploy public key to /home/<user>/.ssh/authorized_keys
 # 2) Copy embedding artifacts to /opt/visual-model-models/ (logos_embedding.pt + .csv)
-# 3) Open TCP 22 (SSH), backend port (default 8000), and Kibana 5601 in the firewall / cloud SG
+# 3) Open TCP 22 (SSH), backend port (default 8000), Kibana 5601, and Grafana 3000 in the firewall / cloud SG
 
 set -euo pipefail
 
@@ -54,4 +54,6 @@ echo "- Deploy user: $DEPLOY_USER (add SSH key to ~$DEPLOY_USER/.ssh/authorized_
 echo "- Put models in: /opt/visual-model-models/{logos_embedding.pt,logos_embedding.csv}"
 echo "- GitHub secrets: TEST_STAND_USER=$DEPLOY_USER, TEST_STAND_VISUAL_MODELS_DIR=/opt/visual-model-models"
 echo "- ELK: add TEST_STAND_ELK_ENV_FILE with ELASTIC_PASSWORD=... (see infra/logging/.env.elk.example)"
+echo "- Monitoring: set TEST_STAND_MONITORING_ENV_FILE with GRAFANA_ADMIN_PASSWORD=... (see infra/monitoring/.env.monitoring.example)"
 echo "- Kibana (after deploy): http://<server-ip>:5601 (login elastic; open TCP 5601 in firewall)"
+echo "- Grafana (after deploy): http://<server-ip>:3000 (login admin; open TCP 3000 in firewall)"
