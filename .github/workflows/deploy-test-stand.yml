@@ -268,6 +268,22 @@ jobs:
           $TEST_STAND_ELK_ENV_FILE
           EOF
 
+      - name: Write runtime env file on test stand (monitoring)
+        env:
+          TEST_STAND_MONITORING_ENV_FILE: ${{ secrets.TEST_STAND_MONITORING_ENV_FILE }}
+          TEST_STAND_HOST: ${{ secrets.TEST_STAND_HOST }}
+        run: |
+          cat <<EOF | ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            "cat > '$REMOTE_APP_DIR/infra/monitoring/.env.monitoring'"
+          PROMETHEUS_RETENTION_TIME=7d
+          PROMETHEUS_RETENTION_SIZE=1GB
+          GRAFANA_ADMIN_USER=admin
+          GRAFANA_ADMIN_PASSWORD=admin
+          GRAFANA_PUBLIC_BASE_URL=http://${TEST_STAND_HOST}:3000
+          $TEST_STAND_MONITORING_ENV_FILE
+          EOF
+
       - name: Pull and restart containers (images from GHCR)
         run: |
           set -euo pipefail
@@ -321,6 +337,7 @@ jobs:
           echo "Pull complete. Starting containers..."
           docker network create naming-check-net 2>/dev/null || true
           ELK_DIR="${REMOTE_APP_DIR}/infra/logging"
+          MONITORING_DIR="${REMOTE_APP_DIR}/infra/monitoring"
           if [ -f "${ELK_DIR}/.env.elk" ] && grep -q '^ELASTIC_PASSWORD=' "${ELK_DIR}/.env.elk"; then
             echo "Starting ELK stack..."
             pull_with_retry "docker.elastic.co/elasticsearch/elasticsearch:8.17.0" 6 15
@@ -374,6 +391,20 @@ jobs:
           if docker ps --format '{{.Names}}' | grep -qx 'filebeat'; then
             docker restart filebeat
             echo "Filebeat restarted to pick up application containers."
+          fi
+          if [ -f "${MONITORING_DIR}/.env.monitoring" ]; then
+            echo "Starting monitoring stack (Prometheus + Grafana)..."
+            pull_with_retry "prom/prometheus:v2.53.0" 6 15
+            pull_with_retry "grafana/grafana:11.0.0" 6 15
+            pull_with_retry "prom/node-exporter:v1.8.1" 6 15
+            pull_with_retry "gcr.io/cadvisor/cadvisor:v0.49.1" 6 15
+            pull_with_retry "prom/blackbox-exporter:v0.25.0" 6 15
+            docker compose -f "${MONITORING_DIR}/docker-compose.monitoring.yml" \
+              --env-file "${MONITORING_DIR}/.env.monitoring" \
+              --project-directory "${MONITORING_DIR}" \
+              up -d
+          else
+            echo "::warning::Skipping monitoring: ${MONITORING_DIR}/.env.monitoring not found." >&2
           fi
           echo "Containers started."
           docker image prune -f --filter until=24h >/dev/null 2>&1 || true
@@ -494,6 +525,40 @@ jobs:
             if [[ "${ok_kibana}" != 1 ]]; then
               echo "::error::Kibana did not become available on 127.0.0.1:5601." >&2
               docker logs kibana --tail 200 >&2 || true
+              exit 1
+            fi
+          fi
+
+          if docker ps --format '{{.Names}}' | grep -qx 'prometheus'; then
+            ok_prometheus=0
+            for _ in $(seq 1 24); do
+              if curl -fsS http://127.0.0.1:9090/-/healthy >/dev/null 2>&1; then
+                ok_prometheus=1
+                echo "Prometheus status OK."
+                break
+              fi
+              sleep 5
+            done
+            if [[ "${ok_prometheus}" != 1 ]]; then
+              echo "::error::Prometheus did not become available on 127.0.0.1:9090." >&2
+              docker logs prometheus --tail 200 >&2 || true
+              exit 1
+            fi
+          fi
+
+          if docker ps --format '{{.Names}}' | grep -qx 'grafana'; then
+            ok_grafana=0
+            for _ in $(seq 1 24); do
+              if curl -fsS http://127.0.0.1:3000/api/health | grep -q '"database":"ok"'; then
+                ok_grafana=1
+                echo "Grafana status OK."
+                break
+              fi
+              sleep 5
+            done
+            if [[ "${ok_grafana}" != 1 ]]; then
+              echo "::error::Grafana did not become available on 127.0.0.1:3000." >&2
+              docker logs grafana --tail 200 >&2 || true
               exit 1
             fi
           fi

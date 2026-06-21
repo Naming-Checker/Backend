@@ -121,6 +121,7 @@ CORS_ALLOW_CREDENTIALS=false
 - `TEST_STAND_TEXT_BIND_PORT` (порт на **localhost** сервера для текстового сервиса, по умолчанию `9100`; наружу не торчит, только `127.0.0.1`)
 - `TEST_STAND_TEXT_ENV_FILE` (доп. строки в `.env` текстового сервиса, например override `MODEL_PATH`)
 - `TEST_STAND_ELK_ENV_FILE` (обязательно для ELK: минимум `ELASTIC_PASSWORD=...`; см. `infra/logging/.env.elk.example`)
+- `TEST_STAND_MONITORING_ENV_FILE` (опционально: строки для `infra/monitoring/.env.monitoring`, обычно `GRAFANA_ADMIN_PASSWORD=...`; см. `infra/monitoring/.env.monitoring.example`)
 
 ### Централизованное логирование (ELK)
 
@@ -132,6 +133,15 @@ CORS_ALLOW_CREDENTIALS=false
 - Диагностика: `bash infra/logging/scripts/diagnose-filebeat.sh` на сервере.
 - Локально: `bash scripts/start-elk-local.sh` (создаёт `infra/logging/.env.elk.local` из example).
 - На уже работающем VPS без повторного bootstrap: `sudo sysctl -w vm.max_map_count=262144` и persist в `/etc/sysctl.d/99-elasticsearch.conf`.
+
+### Мониторинг (Grafana + Prometheus)
+
+При деплое стенда также поднимается monitoring stack из `infra/monitoring/docker-compose.monitoring.yml`:
+
+- `grafana` на `http://<TEST_STAND_HOST>:3000` (логин `admin`, пароль из `GRAFANA_ADMIN_PASSWORD` в `TEST_STAND_MONITORING_ENV_FILE`; если secret не задан, используется `admin`).
+- `prometheus` на `127.0.0.1:9090` (доступ с хоста стенда, наружу не публикуется).
+- Готовый dashboard `Test Stand Overview` провижинится автоматически из `infra/monitoring/grafana/dashboards/test-stand-overview.json`.
+- Источники метрик: `node-exporter`, `cAdvisor` и blackbox health probes для backend/sidecars/Kibana/Grafana.
 
 Одноразовая подготовка сервера (Ubuntu): скрипт `scripts/bootstrap-test-stand-ubuntu.sh` (Docker, пользователь, каталоги, `vm.max_map_count`). **Пароли в Actions не использовать** — только ключ в secrets.
 
