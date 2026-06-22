@@ -31,6 +31,7 @@ class ExternalSourceCollector:
         alias_map: dict[str, Resource] = {
             Resource.YANDEX.value: Resource.YANDEX,
             Resource.YANDEX_VIDEO.value: Resource.YANDEX_VIDEO,
+            Resource.YANDEX_MUSIC.value: Resource.YANDEX_MUSIC,
             Resource.KINOPOISK.value: Resource.KINOPOISK,
             Resource.RKN_MEDIA.value: Resource.RKN_MEDIA,
             Resource.RUTUBE.value: Resource.RUTUBE,
@@ -92,6 +93,26 @@ class ExternalSourceCollector:
                             correlation_id,
                             len(converted),
                             Resource.YANDEX.value,
+                        )
+
+                    elif src_enum is Resource.YANDEX_MUSIC:
+                        try:
+                            from naming_check_backend.infrastructure.collectors.sources.yandex_music import (
+                                YandexMusicSearchProvider,
+                            )
+                        except Exception as e:
+                            logger.exception("Failed to import Yandex Music provider: %s", e)
+                            continue
+
+                        provider = YandexMusicSearchProvider(page)
+                        items = await provider.search(query, limit=limit)
+                        converted = [self._to_dict_item(i) for i in items]
+                        results.append({"source": Resource.YANDEX_MUSIC.value, "results": converted})
+                        logger.info(
+                            "[%s] parsed %d results from %s",
+                            correlation_id,
+                            len(converted),
+                            Resource.YANDEX_MUSIC.value,
                         )
 
                     elif src_enum is Resource.YANDEX_VIDEO:
