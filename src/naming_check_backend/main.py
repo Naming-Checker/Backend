@@ -7,6 +7,7 @@ from naming_check_backend.presentation.api.router import api_router
 from naming_check_backend.presentation.middleware import RequestLoggingMiddleware
 from naming_check_backend.shared.apm import configure_apm
 from naming_check_backend.shared.json_logging import configure_json_logging
+from naming_check_backend.shared.prometheus_metrics import configure_prometheus_metrics, set_service_health
 from naming_check_backend.shared.settings import settings
 
 configure_json_logging(
@@ -35,6 +36,7 @@ if allowed_origins:
 
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(api_router)
+configure_prometheus_metrics(app, service_name="naming-check-backend")
 
 
 @app.on_event("startup")
@@ -46,3 +48,4 @@ def log_startup() -> None:
 
 
 configure_apm(app, service_name="naming-check-backend")
+set_service_health(healthy=True)

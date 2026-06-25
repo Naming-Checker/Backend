@@ -12,6 +12,7 @@ from app.apm import configure_apm
 from app.config import settings
 from app.engine import TextSimilarityEngine
 from app.json_logging import configure_json_logging
+from app.prometheus_metrics import configure_prometheus_metrics, set_service_health
 from app.request_logging import RequestLoggingMiddleware
 
 configure_json_logging(
@@ -108,10 +109,12 @@ def engine_or_503() -> TextSimilarityEngine:
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     if _engine is None:
+        set_service_health(healthy=False)
         return HealthResponse(
             status="degraded",
             detail="Embeddings or model failed to load; check mounted /app/models and logs.",
         )
+    set_service_health(healthy=True)
     return HealthResponse(status="ok")
 
 
@@ -137,3 +140,4 @@ def similarity(payload: SimilarityRequest) -> SimilarityResponse:
 
 
 configure_apm(app, service_name="text-model-service")
+configure_prometheus_metrics(app, service_name="text-model-service")
