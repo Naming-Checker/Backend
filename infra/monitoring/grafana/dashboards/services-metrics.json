@@ -1,17 +1,29 @@
 {
-  "annotations": {
-    "list": []
-  },
+  "annotations": { "list": [] },
+  "description": "HTTP-метрики приложений: RPS, latency, ошибки по сервисам и endpoint.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [],
+  "links": [
+    {
+      "icon": "dashboard",
+      "title": "Overview",
+      "type": "link",
+      "url": "/d/naming-check-home/overview"
+    },
+    {
+      "icon": "dashboard",
+      "title": "Infrastructure",
+      "type": "link",
+      "url": "/d/infrastructure/infrastructure"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "id": 100,
-      "title": "Overview",
+      "title": "Summary",
       "type": "row"
     },
     {
@@ -33,11 +45,12 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
       "id": 1,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
+        "orientation": "horizontal",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "value_and_name"
       },
@@ -50,19 +63,16 @@
           "refId": "A"
         }
       ],
-      "title": "Health status",
+      "title": "Health",
       "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "unit": "reqps"
-        },
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "reqps" },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
       "id": 2,
       "options": {
         "colorMode": "value",
@@ -78,7 +88,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total RPS",
+      "title": "RPS",
       "type": "stat"
     },
     {
@@ -100,7 +110,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
       "id": 3,
       "options": {
         "colorMode": "background",
@@ -116,7 +126,7 @@
           "refId": "A"
         }
       ],
-      "title": "Error rate (4xx+5xx)",
+      "title": "Error rate",
       "type": "stat"
     },
     {
@@ -136,7 +146,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
       "id": 4,
       "options": {
         "colorMode": "value",
@@ -157,7 +167,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
       "id": 101,
       "title": "Traffic",
       "type": "row"
@@ -170,6 +180,7 @@
           "custom": {
             "drawStyle": "line",
             "fillOpacity": 20,
+            "gradientMode": "opacity",
             "lineWidth": 2,
             "showPoints": "never"
           },
@@ -177,10 +188,10 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
       "id": 5,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
@@ -204,13 +215,27 @@
             "drawStyle": "line",
             "fillOpacity": 20,
             "lineWidth": 2,
-            "showPoints": "never"
+            "showPoints": "never",
+            "stacking": { "group": "A", "mode": "normal" }
           },
           "unit": "reqps"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*2xx.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*4xx.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*5xx.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          }
+        ]
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
       "id": 6,
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -219,18 +244,18 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (service, status) (rate(http_requests_total{service=~\"$service\"}[5m]))",
-          "legendFormat": "{{service}} {{status}}",
+          "expr": "sum by (status) (rate(http_requests_total{service=~\"$service\"}[5m]))",
+          "legendFormat": "{{status}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "RPS by status (2xx / 4xx / 5xx)",
+      "title": "RPS by status",
       "type": "timeseries"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
       "id": 102,
       "title": "Latency",
       "type": "row"
@@ -250,7 +275,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
       "id": 7,
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -279,7 +304,7 @@
           "refId": "C"
         }
       ],
-      "title": "Latency percentiles by service",
+      "title": "Percentiles by service",
       "type": "timeseries"
     },
     {
@@ -297,27 +322,27 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
       "id": 8,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "legend": { "calcs": ["max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (service, handler, le) (rate(http_request_duration_seconds_bucket{service=~\"$service\"}[5m])))",
+          "expr": "topk(8, histogram_quantile(0.95, sum by (service, handler, le) (rate(http_request_duration_seconds_bucket{service=~\"$service\"}[5m]))))",
           "legendFormat": "{{service}} {{handler}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Latency p95 by handler",
+      "title": "Slowest handlers (p95)",
       "type": "timeseries"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
       "id": 103,
       "title": "Errors",
       "type": "row"
@@ -337,7 +362,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 25 },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 24 },
       "id": 9,
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -359,19 +384,20 @@
           "refId": "B"
         }
       ],
-      "title": "Error rate % by service",
+      "title": "Error rate by service",
       "type": "timeseries"
     }
   ],
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["test-stand", "services", "metrics"],
+  "tags": ["naming-check", "services"],
   "templating": {
     "list": [
       {
+        "allValue": ".*",
         "current": { "selected": true, "text": "All", "value": "$__all" },
         "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "definition": "label_values(http_requests_total, service)",
+        "definition": "label_values(service_health_status, service)",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
@@ -379,7 +405,7 @@
         "name": "service",
         "options": [],
         "query": {
-          "query": "label_values(http_requests_total, service)",
+          "query": "label_values(service_health_status, service)",
           "refId": "PrometheusVariableQuery"
         },
         "refresh": 2,
@@ -389,10 +415,9 @@
       }
     ]
   },
-  "time": { "from": "now-30m", "to": "now" },
-  "timepicker": {},
-  "timezone": "",
-  "title": "Services Metrics",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Services",
   "uid": "services-metrics",
-  "version": 1
+  "version": 2
 }

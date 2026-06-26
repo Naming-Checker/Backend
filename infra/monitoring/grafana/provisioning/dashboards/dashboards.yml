@@ -1,12 +1,13 @@
 apiVersion: 1
 
 providers:
-  - name: test-stand-dashboards
+  - name: naming-check-dashboards
     orgId: 1
-    folder: Test Stand
+    folder: Naming Check
     type: file
     disableDeletion: false
     editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
     options:
       path: /var/lib/grafana/dashboards
-
