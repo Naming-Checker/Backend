@@ -6,7 +6,7 @@ import time
 from typing import Awaitable, Callable
 
 from fastapi import FastAPI
-from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -44,6 +44,10 @@ def _handler_name(request: Request) -> str:
     return request.url.path
 
 
+def _is_metrics_path(path: str) -> bool:
+    return path.rstrip("/") == "/metrics"
+
+
 def set_service_health(*, healthy: bool) -> None:
     if _service_name is None:
         return
@@ -60,7 +64,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        if request.url.path == "/metrics":
+        if _is_metrics_path(request.url.path):
             return await call_next(request)
 
         start = time.perf_counter()
@@ -85,5 +89,9 @@ def configure_prometheus_metrics(app: FastAPI, *, service_name: str) -> None:
     global _service_name
     _service_name = service_name
     app.add_middleware(PrometheusMiddleware, service_name=service_name)
-    app.mount("/metrics", make_asgi_app())
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics() -> Response:
+        return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
     SERVICE_HEALTH_STATUS.labels(service=service_name).set(0)

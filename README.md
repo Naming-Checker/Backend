@@ -141,7 +141,9 @@ CORS_ALLOW_CREDENTIALS=false
 - `grafana` на `http://<TEST_STAND_HOST>:3000` (логин `admin`, пароль из `GRAFANA_ADMIN_PASSWORD` в `TEST_STAND_MONITORING_ENV_FILE`; если secret не задан, используется `admin`).
 - `prometheus` на `127.0.0.1:9090` (доступ с хоста стенда, наружу не публикуется).
 - Готовый dashboard `Test Stand Overview` провижинится автоматически из `infra/monitoring/grafana/dashboards/test-stand-overview.json`.
+- Dashboard **`Services Metrics`** (`services-metrics.json`) — RPS, latency p50/p95/p99, 4xx/5xx, health по `http_requests_total` / `http_request_duration_seconds`.
 - Источники метрик: `node-exporter`, `cAdvisor`, blackbox health probes и **`/metrics`** на всех трёх сервисах (`http_requests_total`, `http_request_duration_seconds`, `service_health_status`).
+- Наполнить графики тестовым трафиком: `BACKEND_URL=http://<host>:8000 REQUESTS=30 bash scripts/generate-monitoring-traffic.sh`
 
 Одноразовая подготовка сервера (Ubuntu): скрипт `scripts/bootstrap-test-stand-ubuntu.sh` (Docker, пользователь, каталоги, `vm.max_map_count`). **Пароли в Actions не использовать** — только ключ в secrets.
 
