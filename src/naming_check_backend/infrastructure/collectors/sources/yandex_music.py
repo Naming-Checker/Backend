@@ -91,11 +91,7 @@ class YandexMusicSearchProvider(TextSearchProvider):
             "text": query,
         }
 
-        return (
-            urljoin(self.BASE_URL, self._SEARCH_PATH)
-            + "?"
-            + urlencode(params)
-        )
+        return urljoin(self.BASE_URL, self._SEARCH_PATH) + "?" + urlencode(params)
 
     async def _wait_for_page_ready(self) -> None:
         try:
@@ -145,9 +141,7 @@ class YandexMusicSearchProvider(TextSearchProvider):
             )
 
         captcha_forms_count = await self._page.locator(
-            "form[action*='checkcaptcha'], "
-            "form[action*='showcaptcha'], "
-            "form[action*='captcha']"
+            "form[action*='checkcaptcha'], form[action*='showcaptcha'], form[action*='captcha']"
         ).count()
 
         if captcha_forms_count > 0:

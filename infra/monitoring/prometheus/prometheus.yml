@@ -15,6 +15,18 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:8080"]
 
+  - job_name: naming-check-backend
+    static_configs:
+      - targets: ["naming-check-backend:8000"]
+
+  - job_name: visual-model-service
+    static_configs:
+      - targets: ["visual-model-service:9000"]
+
+  - job_name: text-model-service
+    static_configs:
+      - targets: ["text-model-service:9000"]
+
   - job_name: blackbox-http
     metrics_path: /probe
     params:
