@@ -98,14 +98,7 @@ class RknMediaRegistrySearchProvider(TextSearchProvider):
             limit=limit,
         )
 
-        if table_results:
-            return table_results
-
-        return self._parse_div_like_results(
-            soup,
-            page_url=page_url,
-            limit=limit,
-        )
+        return table_results
 
     def _parse_table_results(
         self,
