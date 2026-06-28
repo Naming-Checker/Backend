@@ -1,3 +1,4 @@
+import uuid
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -475,7 +476,7 @@ class DirectCollectRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "query": "PROBIMAX",
+                "query": "EUROPLEX",
                 "resources": ["google_play", "kinopoisk"],
             }
         }
@@ -497,3 +498,28 @@ class DirectCollectResponse(BaseModel):
             }
         }
     )
+
+
+class StartStage2Request(BaseModel):
+    naming: str | None = None
+    resources: list[Resource] | None = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "naming": "EUROPLEX",
+                "resources": ["google_play", "kinopoisk"],
+            }
+        }
+    )
+
+
+class StartStage2Response(BaseModel):
+    correlation_id: uuid.UUID
+    status: ProcessingStatus = ProcessingStatus.ACCEPTED
+
+
+class Stage2StatusResponse(BaseModel):
+    correlation_id: uuid.UUID
+    status: ProcessingStatus
+    response: list[CollectedSourceBatch] | None = None

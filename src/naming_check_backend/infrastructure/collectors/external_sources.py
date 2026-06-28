@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
-from naming_check_backend.infrastructure.collectors.search_provider import TextSearchProvider
 from naming_check_backend.shared.resources import Resource
 
 logger = logging.getLogger(__name__)
@@ -50,35 +50,31 @@ class ExternalSourceCollector:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=self.browser_headless)
             context = await browser.new_context()
-            page = await context.new_page()
 
-            for src in sources:
-                # single provider declaration to satisfy type checker
-                provider: TextSearchProvider | None = None
+            async def _fetch_source(src: object) -> dict[str, Any] | None:
                 # Normalize source to Resource enum when possible
                 src_enum: Resource | None = None
-
-                if isinstance(src, Resource):
-                    src_enum = src
-                else:
-                    try:
+                try:
+                    if isinstance(src, Resource):
+                        src_enum = src
+                    else:
                         if isinstance(src, str):
                             key = src.strip().lower()
                         else:
                             key = str(getattr(src, "value", src)).strip().lower()
 
                         src_enum = alias_map.get(key)
-
                         if src_enum is None:
                             try:
                                 src_enum = Resource(key)
                             except Exception:
                                 src_enum = None
-                    except Exception:
-                        src_enum = None
+                except Exception:
+                    src_enum = None
 
                 src_name = src_enum.value if src_enum is not None else str(src)
-
+                page = await context.new_page()
+                provider: Any = None
                 try:
                     logger.info("[%s] collecting from %s for query=%s", correlation_id, src_name, query)
 
@@ -89,18 +85,18 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import Yandex provider: %s", e)
-                            continue
+                            return None
 
                         provider = YandexTextSearchProvider(page)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.YANDEX.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.YANDEX.value,
+                            src_name,
                         )
+                        return {"source": Resource.YANDEX.value, "results": converted}
 
                     elif src_enum is Resource.YANDEX_MUSIC:
                         try:
@@ -109,18 +105,18 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import Yandex Music provider: %s", e)
-                            continue
+                            return None
 
                         provider = YandexMusicSearchProvider(page)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.YANDEX_MUSIC.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.YANDEX_MUSIC.value,
+                            src_name,
                         )
+                        return {"source": Resource.YANDEX_MUSIC.value, "results": converted}
 
                     elif src_enum is Resource.YANDEX_VIDEO:
                         try:
@@ -129,18 +125,18 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import Yandex video provider: %s", e)
-                            continue
+                            return None
 
                         provider = YandexVideoSearchProvider(page, YandexVideoSearchProvider.BASE_URL)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.YANDEX_VIDEO.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.YANDEX_VIDEO.value,
+                            src_name,
                         )
+                        return {"source": Resource.YANDEX_VIDEO.value, "results": converted}
 
                     elif src_enum is Resource.KINOPOISK:
                         try:
@@ -149,18 +145,18 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import Kinopoisk provider: %s", e)
-                            continue
+                            return None
 
                         provider = KinopoiskSearchProvider(page)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.KINOPOISK.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.KINOPOISK.value,
+                            src_name,
                         )
+                        return {"source": Resource.KINOPOISK.value, "results": converted}
 
                     elif src_enum is Resource.RKN_MEDIA:
                         try:
@@ -169,18 +165,18 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import RKN provider: %s", e)
-                            continue
+                            return None
 
                         provider = RknMediaRegistrySearchProvider(page)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.RKN_MEDIA.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.RKN_MEDIA.value,
+                            src_name,
                         )
+                        return {"source": Resource.RKN_MEDIA.value, "results": converted}
 
                     elif src_enum is Resource.RUTUBE:
                         try:
@@ -189,18 +185,18 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import Rutube provider: %s", e)
-                            continue
+                            return None
 
                         provider = RutubeSearchProvider(page)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.RUTUBE.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.RUTUBE.value,
+                            src_name,
                         )
+                        return {"source": Resource.RUTUBE.value, "results": converted}
 
                     elif src_enum is Resource.RAO_RUSSIAN:
                         try:
@@ -209,18 +205,18 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import RAO (russian) provider: %s", e)
-                            continue
+                            return None
 
                         provider = RaoRussianSearchProvider(page)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.RAO_RUSSIAN.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.RAO_RUSSIAN.value,
+                            src_name,
                         )
+                        return {"source": Resource.RAO_RUSSIAN.value, "results": converted}
 
                     elif src_enum is Resource.RAO_FOREIGN:
                         try:
@@ -229,18 +225,18 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import RAO (foreign) provider: %s", e)
-                            continue
+                            return None
 
                         provider = RaoForeignSearchProvider(page)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.RAO_FOREIGN.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.RAO_FOREIGN.value,
+                            src_name,
                         )
+                        return {"source": Resource.RAO_FOREIGN.value, "results": converted}
 
                     elif src_enum is Resource.GOOGLE_PLAY:
                         try:
@@ -249,21 +245,38 @@ class ExternalSourceCollector:
                             )
                         except Exception as e:
                             logger.exception("Failed to import Google Play provider: %s", e)
-                            continue
+                            return None
 
                         provider = GooglePlaySearchProvider(page)
                         items = await provider.search(query, limit=limit)
                         converted = [self._to_dict_item(i) for i in items]
-                        results.append({"source": Resource.GOOGLE_PLAY.value, "results": converted})
                         logger.info(
                             "[%s] parsed %d results from %s",
                             correlation_id,
                             len(converted),
-                            Resource.GOOGLE_PLAY.value,
+                            src_name,
                         )
+                        return {"source": Resource.GOOGLE_PLAY.value, "results": converted}
+
+                    # no provider matched
+                    logger.info("[%s] no provider available for %s", correlation_id, src_name)
+                    return None
 
                 except Exception as e:
                     logger.exception("[%s] error collecting from %s: %s", correlation_id, src, e)
+                    return None
+                finally:
+                    try:
+                        await page.close()
+                    except Exception:
+                        pass
+
+            # execute collection for all sources concurrently
+            tasks = [asyncio.create_task(_fetch_source(src)) for src in sources]
+            gathered = await asyncio.gather(*tasks, return_exceptions=False)
+            for r in gathered:
+                if r:
+                    results.append(r)
 
             try:
                 await context.close()
