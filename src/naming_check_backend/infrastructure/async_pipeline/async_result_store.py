@@ -135,9 +135,7 @@ class AsyncResultStore:
         """Purge expired jobs from the store. Caller MUST hold the lock."""
         now = time.time()
         to_delete = [
-            cid
-            for cid, job in self._store.items()
-            if job.get("expires_at") and job["expires_at"] <= now
+            cid for cid, job in self._store.items() if job.get("expires_at") and job["expires_at"] <= now
         ]
         if not to_delete:
             return
