@@ -1,0 +1,83 @@
+groups:
+  - name: naming-check-apps
+    rules:
+      - alert: AppScrapeDown
+        expr: up{job=~"naming-check-backend|visual-model-service|text-model-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сервис {{ $labels.job }} недоступен для Prometheus"
+          description: "Target {{ $labels.instance }} не отвечает на /metrics scrape более 2 минут."
+
+      - alert: AppProbeDown
+        expr: probe_success{job="blackbox-http",instance=~".*(naming-check-backend|visual-model-service|text-model-service).*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP probe failed: {{ $labels.instance }}"
+          description: "Blackbox health-check не проходит более 2 минут."
+
+      - alert: AppHealthDegraded
+        expr: service_health_status{service=~"naming-check-backend|visual-model-service|text-model-service"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Сервис {{ $labels.service }} degraded"
+          description: "service_health_status=0 более 5 минут (модель не загружена или /health degraded)."
+
+      - alert: HighErrorRate
+        expr: |
+          100 * sum by (service) (rate(http_requests_total{service=~"naming-check-backend|visual-model-service|text-model-service",status=~"4xx|5xx"}[5m]))
+          / clamp_min(sum by (service) (rate(http_requests_total{service=~"naming-check-backend|visual-model-service|text-model-service"}[5m])), 1e-9) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий error rate: {{ $labels.service }}"
+          description: "Доля 4xx/5xx > 5% в течение 5 минут."
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum by (service, le) (rate(http_request_duration_seconds_bucket{service=~"naming-check-backend|visual-model-service|text-model-service"}[5m]))) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая latency p95: {{ $labels.service }}"
+          description: "p95 HTTP latency > 3s в течение 5 минут."
+
+  - name: naming-check-infra
+    rules:
+      - alert: HostHighMemory
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Мало свободной RAM на VPS"
+          description: "Использование RAM > 90% более 5 минут. Риск OOM для ML sidecars и Elasticsearch."
+
+      - alert: HostDiskLow
+        expr: |
+          100 * min(
+            node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+          ) < 15
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Мало места на диске"
+          description: "Свободно < 15% на / более 5 минут."
+
+      - alert: HostHighCPU
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая загрузка CPU хоста"
+          description: "CPU > 90% в среднем за 10 минут."

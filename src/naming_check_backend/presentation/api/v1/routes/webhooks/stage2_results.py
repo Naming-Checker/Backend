@@ -124,7 +124,6 @@ async def get_stage2_job_status(correlation_id: uuid.UUID) -> Stage2StatusRespon
     )
 
 
-
 @router.post(
     "/direct",
     status_code=status.HTTP_200_OK,
