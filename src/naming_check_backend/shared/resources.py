@@ -3,6 +3,7 @@ from enum import StrEnum
 
 class Resource(StrEnum):
     YANDEX = "yandex"
+    YOUTUBE = "youtube"
     YANDEX_VIDEO = "yandex_video"
     YANDEX_MUSIC = "yandex_music"
     KINOPOISK = "kinopoisk"
