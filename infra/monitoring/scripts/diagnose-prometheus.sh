@@ -70,6 +70,26 @@ PY
 done
 
 echo
+echo "=== Alert rules (Prometheus) ==="
+curl -fsS "${PROM_URL}/api/v1/rules" | python3 - <<'PY' || true
+import json, sys
+data = json.load(sys.stdin).get("data", {}).get("groups", [])
+for g in data:
+    for r in g.get("rules", []):
+        if r.get("type") != "alerting":
+            continue
+        print(f"{r.get('state', '?'):10} {r.get('health', '?'):6} {r.get('name', '?')}")
+PY
+
+echo
+echo "=== Alertmanager ==="
+if curl -fsS http://127.0.0.1:9093/-/healthy >/dev/null 2>&1; then
+  echo "Alertmanager OK (http://127.0.0.1:9093)"
+else
+  echo "Alertmanager not reachable on 127.0.0.1:9093"
+fi
+
+echo
 echo "Tips:"
 echo "- Targets DOWN + lastError 404 on /metrics → deploy branch with prometheus_metrics.py not on stand yet"
 echo "- Targets DOWN + 307 redirect → fixed in latest code (GET /metrics must return 200)"
@@ -77,3 +97,4 @@ echo "- up=1 but http_requests_total NO DATA → run generate-monitoring-traffic
 echo "- Load test dashboard: Grafana → Naming Check → Load Testing"
 echo "- Full check: bash scripts/load/verify-metrics-collection.sh"
 echo "- Grafana Explore empty: pick datasource Prometheus, time range Last 30 minutes, query: up"
+echo "- Test Telegram alert: bash infra/monitoring/scripts/test-alert.sh"

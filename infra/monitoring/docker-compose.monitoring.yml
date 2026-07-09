@@ -11,6 +11,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
@@ -90,6 +91,27 @@ services:
     networks:
       - naming-check-net
     restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    environment:
+      ALERTMANAGER_TELEGRAM_BOT_TOKEN: ${ALERTMANAGER_TELEGRAM_BOT_TOKEN:-}
+      ALERTMANAGER_TELEGRAM_CHAT_ID: ${ALERTMANAGER_TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./scripts/run-alertmanager.sh:/run-alertmanager.sh:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - naming-check-net
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/run-alertmanager.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/healthy >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
 
 networks:
   naming-check-net:

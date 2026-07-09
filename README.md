@@ -121,7 +121,7 @@ CORS_ALLOW_CREDENTIALS=false
 - `TEST_STAND_TEXT_BIND_PORT` (порт на **localhost** сервера для текстового сервиса, по умолчанию `9100`; наружу не торчит, только `127.0.0.1`)
 - `TEST_STAND_TEXT_ENV_FILE` (доп. строки в `.env` текстового сервиса, например override `MODEL_PATH`)
 - `TEST_STAND_ELK_ENV_FILE` (обязательно для ELK: минимум `ELASTIC_PASSWORD=...`; см. `infra/logging/.env.elk.example`)
-- `TEST_STAND_MONITORING_ENV_FILE` (опционально: строки для `infra/monitoring/.env.monitoring`, обычно `GRAFANA_ADMIN_PASSWORD=...`; см. `infra/monitoring/.env.monitoring.example`)
+- `TEST_STAND_MONITORING_ENV_FILE` (опционально: `GRAFANA_ADMIN_PASSWORD`, `ALERTMANAGER_TELEGRAM_BOT_TOKEN`, `ALERTMANAGER_TELEGRAM_CHAT_ID`; см. `infra/monitoring/.env.monitoring.example`)
 
 ### Централизованное логирование (ELK)
 
@@ -169,6 +169,16 @@ k6 запускается в Docker (`infra/load-testing/`), цель — тол
 Проверка метрик: `bash scripts/load/verify-metrics-collection.sh` или `make load-test-metrics`.
 
 Отчёт после прогона: `make load-test-report PROFILE=smoke` или `bash scripts/load/export-load-test-summary.sh --report`. Шаблон: [`docs/performance/load_test_report_template.md`](docs/performance/load_test_report_template.md).
+
+### Алертинг (Alertmanager)
+
+- Правила: `infra/monitoring/prometheus/alerts.yml` (service down, error rate, latency, RAM, disk).
+- Alertmanager на `127.0.0.1:9093` (UI для просмотра активных алертов; с хоста стенда).
+- Уведомления в **Telegram**: задайте в `TEST_STAND_MONITORING_ENV_FILE`:
+  - `ALERTMANAGER_TELEGRAM_BOT_TOKEN=...`
+  - `ALERTMANAGER_TELEGRAM_CHAT_ID=...`
+- Тест алерта: `bash infra/monitoring/scripts/test-alert.sh` (на VPS по SSH).
+- Runbook: [infra/monitoring/docs/alerting_runbook.md](infra/monitoring/docs/alerting_runbook.md).
 
 Одноразовая подготовка сервера (Ubuntu): скрипт `scripts/bootstrap-test-stand-ubuntu.sh` (Docker, пользователь, каталоги, `vm.max_map_count`). **Пароли в Actions не использовать** — только ключ в secrets.
 

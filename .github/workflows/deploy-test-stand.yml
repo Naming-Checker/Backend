@@ -399,6 +399,7 @@ jobs:
             pull_with_retry "prom/node-exporter:v1.8.1" 6 15
             pull_with_retry "gcr.io/cadvisor/cadvisor:v0.49.1" 6 15
             pull_with_retry "prom/blackbox-exporter:v0.25.0" 6 15
+            pull_with_retry "prom/alertmanager:v0.27.0" 6 15
             docker compose -f "${MONITORING_DIR}/docker-compose.monitoring.yml" \
               --env-file "${MONITORING_DIR}/.env.monitoring" \
               --project-directory "${MONITORING_DIR}" \
@@ -559,6 +560,23 @@ jobs:
             if [[ "${ok_grafana}" != 1 ]]; then
               echo "::error::Grafana did not become available on 127.0.0.1:3000." >&2
               docker logs grafana --tail 200 >&2 || true
+              exit 1
+            fi
+          fi
+
+          if docker ps --format '{{.Names}}' | grep -qx 'alertmanager'; then
+            ok_alertmanager=0
+            for _ in $(seq 1 24); do
+              if curl -fsS http://127.0.0.1:9093/-/healthy >/dev/null 2>&1; then
+                ok_alertmanager=1
+                echo "Alertmanager status OK."
+                break
+              fi
+              sleep 5
+            done
+            if [[ "${ok_alertmanager}" != 1 ]]; then
+              echo "::error::Alertmanager did not become available on 127.0.0.1:9093." >&2
+              docker logs alertmanager --tail 200 >&2 || true
               exit 1
             fi
           fi

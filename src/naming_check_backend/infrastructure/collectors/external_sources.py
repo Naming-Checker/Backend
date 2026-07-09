@@ -37,6 +37,7 @@ class ExternalSourceCollector:
 
         alias_map: dict[str, Resource] = {
             Resource.YANDEX.value: Resource.YANDEX,
+            Resource.YOUTUBE.value: Resource.YOUTUBE,
             Resource.YANDEX_VIDEO.value: Resource.YANDEX_VIDEO,
             Resource.YANDEX_MUSIC.value: Resource.YANDEX_MUSIC,
             Resource.KINOPOISK.value: Resource.KINOPOISK,
@@ -97,6 +98,26 @@ class ExternalSourceCollector:
                             src_name,
                         )
                         return {"source": Resource.YANDEX.value, "results": converted}
+
+                    elif src_enum is Resource.YOUTUBE:
+                        try:
+                            from naming_check_backend.infrastructure.collectors.sources.youtube import (
+                                YouTubeSearchProvider,
+                            )
+                        except Exception as e:
+                            logger.exception("Failed to import YouTube provider: %s", e)
+                            return None
+
+                        provider = YouTubeSearchProvider(page)
+                        items = await provider.search(query, limit=limit)
+                        converted = [self._to_dict_item(i) for i in items]
+                        logger.info(
+                            "[%s] parsed %d results from %s",
+                            correlation_id,
+                            len(converted),
+                            src_name,
+                        )
+                        return {"source": Resource.YOUTUBE.value, "results": converted}
 
                     elif src_enum is Resource.YANDEX_MUSIC:
                         try:

@@ -1,5 +1,3 @@
-
-
 # def test_stage2_webhook_accepts_partial_results(client: TestClient) -> None:
 #     response = client.post(
 #         "/api/v1/webhooks/stage2-results",
