@@ -1,0 +1,76 @@
+groups:
+  - name: naming_check_load_test
+    interval: 15s
+    rules:
+      # RPS per service (used by Load Testing dashboard).
+      - record: naming_check:http_requests:rate5m
+        expr: sum by (service) (rate(http_requests_total[5m]))
+
+      # Error rate % per service.
+      - record: naming_check:http_requests_error_rate:percent5m
+        expr: |
+          100 * sum by (service) (rate(http_requests_total{status=~"4xx|5xx"}[5m]))
+          / clamp_min(sum by (service) (rate(http_requests_total[5m])), 1e-9)
+
+      # Latency quantiles per service.
+      - record: naming_check:http_request_duration_seconds:p50
+        expr: histogram_quantile(0.50, sum by (service, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: naming_check:http_request_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum by (service, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: naming_check:http_request_duration_seconds:p99
+        expr: histogram_quantile(0.99, sum by (service, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      # RPS for load-test scenario handlers (S1–S4).
+      - record: naming_check:scenario_rps:rate5m
+        expr: |
+          sum by (service, handler) (
+            rate(http_requests_total{
+              handler=~"/api/v1/(text-similarity/search|logo-similarity/search|logo-similarity/preview|health)"
+            }[5m])
+          )
+
+      # Latency p95 per scenario handler.
+      - record: naming_check:scenario_duration_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (service, handler, le) (
+              rate(http_request_duration_seconds_bucket{
+                handler=~"/api/v1/(text-similarity/search|logo-similarity/search|logo-similarity/preview|health)"
+              }[5m])
+            )
+          )
+
+      # Aggregate load-test traffic (all three app services).
+      - record: naming_check:load_test:http_requests:rate5m
+        expr: |
+          sum(rate(http_requests_total{
+            service=~"naming-check-backend|visual-model-service|text-model-service"
+          }[5m]))
+
+      - record: naming_check:load_test:http_requests_error_rate:percent5m
+        expr: |
+          100 * sum(rate(http_requests_total{
+            service=~"naming-check-backend|visual-model-service|text-model-service",
+            status=~"4xx|5xx"
+          }[5m]))
+          / clamp_min(sum(rate(http_requests_total{
+            service=~"naming-check-backend|visual-model-service|text-model-service"
+          }[5m])), 1e-9)
+
+      - record: naming_check:load_test:http_request_duration_seconds:p95
+        expr: |
+          histogram_quantile(0.95, sum by (le) (
+            rate(http_request_duration_seconds_bucket{
+              service=~"naming-check-backend|visual-model-service|text-model-service"
+            }[5m])
+          ))
+
+      - record: naming_check:load_test:http_request_duration_seconds:p99
+        expr: |
+          histogram_quantile(0.99, sum by (le) (
+            rate(http_request_duration_seconds_bucket{
+              service=~"naming-check-backend|visual-model-service|text-model-service"
+            }[5m])
+          ))

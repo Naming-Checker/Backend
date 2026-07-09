@@ -57,3 +57,4 @@ echo "- ELK: add TEST_STAND_ELK_ENV_FILE with ELASTIC_PASSWORD=... (see infra/lo
 echo "- Monitoring: set TEST_STAND_MONITORING_ENV_FILE with GRAFANA_ADMIN_PASSWORD=... (see infra/monitoring/.env.monitoring.example)"
 echo "- Kibana (after deploy): http://<server-ip>:5601 (login elastic; open TCP 5601 in firewall)"
 echo "- Grafana (after deploy): http://<server-ip>:3000 (login admin; open TCP 3000 in firewall)"
+echo "- Load testing: after deploy run bash scripts/load/prepare-load-test-env.sh (see docs/performance/load_test_environment.md)"

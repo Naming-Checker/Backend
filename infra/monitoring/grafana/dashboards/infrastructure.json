@@ -16,6 +16,12 @@
       "title": "Services",
       "type": "link",
       "url": "/d/services-metrics/services"
+    },
+    {
+      "icon": "dashboard",
+      "title": "Load Testing",
+      "type": "link",
+      "url": "/d/load-testing/load-testing"
     }
   ],
   "panels": [

@@ -146,9 +146,29 @@ CORS_ALLOW_CREDENTIALS=false
   - **Overview** — сводка: apps UP, RPS, errors, latency, CPU/RAM, probes.
   - **Services** — HTTP-метрики приложений (RPS, p50/p95/p99, 4xx/5xx, handlers).
   - **Infrastructure** — хост и контейнеры (CPU, RAM, disk, probes, top containers).
+  - **Load Testing** — анализ нагрузочных прогонов: RPS, p95/p99, error rate, CPU/RAM, сценарии S1–S4.
+- Recording rules для load test: `infra/monitoring/prometheus/recording_rules.yml`
+- Документация метрик: `infra/monitoring/docs/metrics_collection.md`
 - Источники метрик: `node-exporter`, `cAdvisor`, blackbox health probes и **`/metrics`** на всех трёх сервисах.
 - Наполнить графики тестовым трафиком: `BACKEND_URL=http://<host>:8000 REQUESTS=30 bash scripts/generate-monitoring-traffic.sh`
 - Диагностика: `bash infra/monitoring/scripts/diagnose-prometheus.sh` на сервере.
+
+### Нагрузочное тестирование
+
+Окружение и runbook: [`docs/performance/load_test_environment.md`](docs/performance/load_test_environment.md). Цели и метрики: [`docs/performance/load_testing_goals.md`](docs/performance/load_testing_goals.md).
+
+На test stand после деплоя:
+
+```bash
+bash scripts/load/prepare-load-test-env.sh   # или make load-test-prepare
+bash scripts/load/run-smoke-load-test.sh     # smoke k6: health + text search
+```
+
+k6 запускается в Docker (`infra/load-testing/`), цель — только test stand (allowlist хостов). Во время прогона смотрите Grafana → **Naming Check → Load Testing** (refresh 10 s).
+
+Проверка метрик: `bash scripts/load/verify-metrics-collection.sh` или `make load-test-metrics`.
+
+Отчёт после прогона: `make load-test-report PROFILE=smoke` или `bash scripts/load/export-load-test-summary.sh --report`. Шаблон: [`docs/performance/load_test_report_template.md`](docs/performance/load_test_report_template.md).
 
 Одноразовая подготовка сервера (Ubuntu): скрипт `scripts/bootstrap-test-stand-ubuntu.sh` (Docker, пользователь, каталоги, `vm.max_map_count`). **Пароли в Actions не использовать** — только ключ в secrets.
 

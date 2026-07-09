@@ -56,9 +56,24 @@ print(r.status, 'http_requests_total' in body)
   fi
 done
 
+echo "=== Load test recording rules ==="
+for q in 'naming_check:load_test:http_requests:rate5m' \
+         'naming_check:load_test:http_requests_error_rate:percent5m' \
+         'naming_check:scenario_rps:rate5m'; do
+  echo -n "${q}: "
+  curl -fsS -G "${PROM_URL}/api/v1/query" --data-urlencode "query=${q}" | python3 - <<'PY'
+import json, sys
+r = json.load(sys.stdin)
+res = r.get("data", {}).get("result", [])
+print(len(res), "series" if res else "NO DATA (need traffic + ~30s for rules)")
+PY
+done
+
 echo
 echo "Tips:"
 echo "- Targets DOWN + lastError 404 on /metrics → deploy branch with prometheus_metrics.py not on stand yet"
 echo "- Targets DOWN + 307 redirect → fixed in latest code (GET /metrics must return 200)"
 echo "- up=1 but http_requests_total NO DATA → run generate-monitoring-traffic.sh"
+echo "- Load test dashboard: Grafana → Naming Check → Load Testing"
+echo "- Full check: bash scripts/load/verify-metrics-collection.sh"
 echo "- Grafana Explore empty: pick datasource Prometheus, time range Last 30 minutes, query: up"

@@ -10,6 +10,8 @@ htmlcov/
 .env
 .env.elk.local
 infra/logging/.env.elk
+infra/load-testing/.env.load
+infra/monitoring/.env.monitoring
 .torch_home/
 
 
