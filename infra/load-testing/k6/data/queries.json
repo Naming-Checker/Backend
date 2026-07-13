@@ -1,0 +1,12 @@
+[
+  {"query": "EUROPLEX", "mktu_codes": [35, 42]},
+  {"query": "СБЕРБАНК", "mktu_codes": [36]},
+  {"query": "МТС", "mktu_codes": [9, 38]},
+  {"query": "ЯНДЕКС", "mktu_codes": [9, 35, 42]},
+  {"query": "ГАЗПРОМ", "mktu_codes": [4, 35, 39]},
+  {"query": "WILDBERRIES", "mktu_codes": [35]},
+  {"query": "OZON", "mktu_codes": [35, 39]},
+  {"query": "ТИНЬКОФФ", "mktu_codes": [36]},
+  {"query": "VK", "mktu_codes": [9, 41, 42]},
+  {"query": "ROSTELECOM", "mktu_codes": [38]}
+]

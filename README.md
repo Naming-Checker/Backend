@@ -161,14 +161,25 @@ CORS_ALLOW_CREDENTIALS=false
 
 ```bash
 bash scripts/load/prepare-load-test-env.sh   # или make load-test-prepare
-bash scripts/load/run-smoke-load-test.sh     # smoke k6: health + text search
+make load-test-smoke                          # smoke (1 VU, 30s)
+make load-test-baseline                       # baseline (1 VU, 10m)
+make load-test-stress                         # stress (ramping-vus)
 ```
 
-k6 запускается в Docker (`infra/load-testing/`), цель — только test stand (allowlist хостов). Во время прогона смотрите Grafana → **Naming Check → Load Testing** (refresh 10 s).
+Универсальный запуск профиля:
+
+```bash
+PROFILE=baseline LOAD_TEST_DURATION=5m LOAD_TEST_VUS=2 bash scripts/load/run-load-test.sh
+PROFILE=stress LOAD_TEST_STAGES="2m:5,4m:15,4m:30,2m:5" bash scripts/load/run-load-test.sh
+```
+
+k6 запускается в Docker (`infra/load-testing/`), цель — только test stand (allowlist хостов). Сценарии реализуют mixed поток S1–S4 (веса по умолчанию 60/25/10/5). Во время прогона смотрите Grafana → **Naming Check → Load Testing** (refresh 10 s).
 
 Проверка метрик: `bash scripts/load/verify-metrics-collection.sh` или `make load-test-metrics`.
 
 Отчёт после прогона: `make load-test-report PROFILE=smoke` или `bash scripts/load/export-load-test-summary.sh --report`. Шаблон: [`docs/performance/load_test_report_template.md`](docs/performance/load_test_report_template.md).
+
+Ручной запуск из CI/CD: workflow `.github/workflows/load-test.yml` (`workflow_dispatch`, profile/duration/vus/rps).
 
 ### Алертинг (Alertmanager)
 

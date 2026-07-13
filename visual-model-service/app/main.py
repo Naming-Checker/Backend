@@ -146,7 +146,16 @@ def similarity(
         with tempfile.NamedTemporaryFile(prefix="query-logo-", suffix=suffix, delete=False) as tmp:
             tmp.write(data)
             tmp_path = tmp.name
-        rows = eng.top_k_similar(tmp_path, k=k)
+        try:
+            rows = eng.top_k_similar(tmp_path, k=k)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            logger.exception("logo similarity inference failed")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not process image: {exc}",
+            ) from exc
         matches = [
             MatchItem(logo_path=p, cosine_similarity=cos, similarity_percent=pct) for p, cos, pct in rows
         ]

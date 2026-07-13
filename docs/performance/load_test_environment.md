@@ -95,13 +95,28 @@ bash scripts/load/verify-load-test-ready.sh
 - `POST /api/v1/text-similarity/search`;
 - наличие контейнеров и monitoring (если доступны).
 
-### Шаг 3. Smoke load test
+### Шаг 3. Запуск профиля (smoke / baseline / stress)
 
 ```bash
-bash scripts/load/run-smoke-load-test.sh
+# smoke
+PROFILE=smoke bash scripts/load/run-load-test.sh
+
+# baseline (дефолт: 1 VU, 10m)
+PROFILE=baseline bash scripts/load/run-load-test.sh
+
+# stress (дефолтные stages 5→15→30 VU)
+PROFILE=stress bash scripts/load/run-load-test.sh
 ```
 
-k6 запускает 1 VU / 30 с: health + текстовый поиск. Во время прогона смотрите Grafana → **Naming Check → Services**.
+Краткие make-цели:
+
+```bash
+make load-test-smoke
+make load-test-baseline
+make load-test-stress
+```
+
+Сценарии используют mixed-поток S1–S4 с весами по умолчанию 60/25/10/5.
 
 ## 5. Конфигурация
 
@@ -111,7 +126,12 @@ k6 запускает 1 VU / 30 с: health + текстовый поиск. Во
 |------------|----------|-------------------------------------|
 | `LOAD_TEST_BASE_URL` | URL backend API | `http://naming-check-backend:8000` |
 | `LOAD_TEST_ALLOWED_HOSTS` | Allowlist хостов | `localhost,127.0.0.1,naming-check-backend` |
-| `LOAD_TEST_PROFILE` | Профиль из goals doc | `baseline` |
+| `LOAD_TEST_PROFILE` | Профиль (`smoke`/`baseline`/`stress`) | `smoke` |
+| `LOAD_TEST_VUS` | Количество пользователей (для smoke/baseline) | `1` |
+| `LOAD_TEST_DURATION` | Длительность прогона | `30s` |
+| `LOAD_TEST_RPS` | Целевой RPS (если >0, smoke/baseline = constant-arrival-rate) | `0` |
+| `LOAD_TEST_STAGES` | Stages для stress (`4m:5,6m:15,...`) | из сценария |
+| `LOAD_TEST_S1_WEIGHT..S4_WEIGHT` | Веса mixed S1/S2/S3/S4 | `60/25/10/5` |
 | `PROMETHEUS_URL` | Для оператора | `http://127.0.0.1:9090` |
 | `GRAFANA_URL` | Для оператора | `http://127.0.0.1:3000` |
 | `K6_OUT` | Доп. вывод k6 (JSON, InfluxDB) | пусто |
@@ -145,14 +165,18 @@ backend/
 │   ├── docker-compose.load-testing.yml   # k6 runner
 │   ├── .env.load.example                 # шаблон конфигурации
 │   └── k6/
-│       ├── scripts/smoke.js              # smoke-сценарий S1+S4
-│       └── data/                         # тестовые файлы (логотипы)
+│       ├── scripts/smoke.js              # smoke mixed S1–S4
+│       ├── scripts/baseline.js           # baseline mixed S1–S4
+│       ├── scripts/stress.js             # stress mixed S1–S4
+│       ├── scripts/lib/                  # общий код конфигурации/flows/summary
+│       └── data/                         # queries.json + sample-logo.png
 ├── scripts/load/
 │   ├── prepare-load-test-env.sh          # подготовка окружения
 │   ├── verify-load-test-ready.sh         # pre-flight
 │   ├── verify-metrics-collection.sh      # pre-flight метрик
 │   ├── export-load-test-summary.sh       # экспорт отчёта из Prometheus
-│   └── run-smoke-load-test.sh            # быстрый прогон
+│   ├── run-load-test.sh                 # универсальный runner профилей
+│   └── run-smoke-load-test.sh            # обёртка для smoke
 └── docs/performance/
     ├── load_testing_goals.md
     ├── load_test_environment.md          # этот документ
@@ -201,6 +225,17 @@ backend/
 | Тестовое окружение | ✅ `scripts/load/prepare-load-test-env.sh` |
 | Сбор метрик | ✅ Prometheus + recording rules + `verify-metrics-collection.sh` |
 | Grafana dashboards | ✅ `load-testing.json` + ссылки из Overview/Services/Infrastructure |
-| Сценарии нагрузки | ⏳ отдельная задача (mixed S1–S4, профили normal/peak/stress) |
+| Сценарии нагрузки | ✅ #75: smoke / baseline / stress, mixed S1–S4 |
 
 **Definition of Done (#74):** команда запускает smoke-тест и видит основные метрики на дашборде **Load Testing**.
+
+
+## 11. CI/CD запуск сценариев (#75)
+
+Ручной запуск через GitHub Actions:
+
+- Workflow: `.github/workflows/load-test.yml`
+- Trigger: `workflow_dispatch`
+- Inputs: `profile`, `duration` (опц.), `vus` (опц.), `rps` (опц.)
+
+Этот workflow предназначен для повторяемого запуска против test stand без автозапуска в PR.

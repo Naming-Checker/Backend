@@ -10,7 +10,7 @@ TXT_RESET := \e[0m
 .PHONY: start stop migrations docker-migrations-up docker-migrations-down \
 	docker-migrations-create isort black format ruff_format ruff_lint \
 	flake8 mypy lint test test-ci ruff-ci mypy-ci docker-test \
-  docker-auto_test ci check load-test-prepare load-test-verify load-test-smoke load-test-metrics load-test-export load-test-report
+  docker-auto_test ci check load-test-prepare load-test-verify load-test-smoke load-test-baseline load-test-stress load-test load-test-metrics load-test-export load-test-report
 
 start:
 	docker-compose up --build -d
@@ -104,8 +104,18 @@ load-test-prepare:
 load-test-verify:
 	bash scripts/load/verify-load-test-ready.sh
 
+load-test:
+	@if [ -z "$(PROFILE)" ]; then echo "Use: make load-test PROFILE=smoke|baseline|stress"; exit 1; fi
+	PROFILE=$(PROFILE) bash scripts/load/run-load-test.sh
+
 load-test-smoke:
-	bash scripts/load/run-smoke-load-test.sh
+	PROFILE=smoke bash scripts/load/run-load-test.sh
+
+load-test-baseline:
+	PROFILE=baseline bash scripts/load/run-load-test.sh
+
+load-test-stress:
+	PROFILE=stress bash scripts/load/run-load-test.sh
 
 load-test-metrics:
 	bash scripts/load/verify-metrics-collection.sh
