@@ -1,0 +1,68 @@
+name: Load Test (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Load test profile"
+        required: true
+        default: "smoke"
+        type: choice
+        options:
+          - smoke
+          - baseline
+          - stress
+      duration:
+        description: "Override LOAD_TEST_DURATION (e.g. 5m)"
+        required: false
+        default: ""
+      vus:
+        description: "Override LOAD_TEST_VUS"
+        required: false
+        default: ""
+      rps:
+        description: "Override LOAD_TEST_RPS (smoke/baseline)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  load-test:
+    name: load-test-${{ inputs.profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TEST_STAND_HOST: ${{ secrets.TEST_STAND_HOST }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Require test stand secret
+        run: |
+          if [ -z "${TEST_STAND_HOST}" ]; then
+            echo "::error::TEST_STAND_HOST secret is required"
+            exit 1
+          fi
+
+      - name: Prepare load-test env file
+        run: |
+          cp infra/load-testing/.env.load.example infra/load-testing/.env.load
+          cat <<EOT >> infra/load-testing/.env.load
+          LOAD_TEST_BASE_URL=http://${TEST_STAND_HOST}:8000
+          LOAD_TEST_VERIFY_URL=http://${TEST_STAND_HOST}:8000
+          LOAD_TEST_ALLOWED_HOSTS=localhost,127.0.0.1,naming-check-backend,${TEST_STAND_HOST}
+          EOT
+
+      - name: Ensure docker network exists for k6 compose
+        run: docker network create naming-check-net || true
+
+      - name: Run profile
+        env:
+          PROFILE: ${{ inputs.profile }}
+          LOAD_TEST_DURATION: ${{ inputs.duration }}
+          LOAD_TEST_VUS: ${{ inputs.vus }}
+          LOAD_TEST_RPS: ${{ inputs.rps }}
+        run: bash scripts/load/run-load-test.sh

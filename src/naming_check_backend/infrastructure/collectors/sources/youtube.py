@@ -91,11 +91,7 @@ class YouTubeSearchProvider(TextSearchProvider):
             "search_query": query,
         }
 
-        return (
-            urljoin(self.BASE_URL, self._SEARCH_PATH)
-            + "?"
-            + urlencode(params)
-        )
+        return urljoin(self.BASE_URL, self._SEARCH_PATH) + "?" + urlencode(params)
 
     async def _wait_for_page_ready(self) -> None:
         try:
@@ -129,34 +125,25 @@ class YouTubeSearchProvider(TextSearchProvider):
         if "consent.youtube" in current_url or "consent.google" in current_url:
             raise YouTubeVerificationError(
                 "YouTube returned consent page instead of search results. "
-                "Run with headless=False, accept consent manually, " \
+                "Run with headless=False, accept consent manually, "
                 "then rerun with the same persistent profile."
             )
 
         if "/sorry/" in current_url or "sorry/index" in current_url:
-            raise YouTubeVerificationError(
-                "YouTube returned verification page instead of search results."
-            )
+            raise YouTubeVerificationError("YouTube returned verification page instead of search results.")
 
         if "unusual traffic" in title:
-            raise YouTubeVerificationError(
-                "YouTube returned unusual traffic verification page."
-            )
+            raise YouTubeVerificationError("YouTube returned unusual traffic verification page.")
 
         if "captcha" in title:
-            raise YouTubeVerificationError(
-                "YouTube returned captcha page instead of search results."
-            )
+            raise YouTubeVerificationError("YouTube returned captcha page instead of search results.")
 
         sorry_forms_count = await self._page.locator(
-            "form[action*='/sorry/'], "
-            "form[action*='sorry/index']"
+            "form[action*='/sorry/'], form[action*='sorry/index']"
         ).count()
 
         if sorry_forms_count > 0:
-            raise YouTubeVerificationError(
-                "YouTube returned verification form instead of search results."
-            )
+            raise YouTubeVerificationError("YouTube returned verification form instead of search results.")
 
         body_text = await self._page.locator("body").inner_text(timeout=10_000)
         normalized_text = body_text.lower()
@@ -168,9 +155,7 @@ class YouTubeSearchProvider(TextSearchProvider):
         )
 
         if any(marker in normalized_text for marker in real_verification_markers):
-            raise YouTubeVerificationError(
-                "YouTube returned unusual traffic verification page."
-            )
+            raise YouTubeVerificationError("YouTube returned unusual traffic verification page.")
 
         consent_markers = (
             "before you continue to youtube",
@@ -183,9 +168,7 @@ class YouTubeSearchProvider(TextSearchProvider):
             any(marker in normalized_text for marker in consent_markers)
             and "youtube.com/results" not in current_url
         ):
-            raise YouTubeVerificationError(
-                "YouTube returned consent page instead of search results."
-            )
+            raise YouTubeVerificationError("YouTube returned consent page instead of search results.")
 
     async def _extract_results_from_dom(self) -> list[dict[str, str]]:
         result = await self._page.evaluate(
