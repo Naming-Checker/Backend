@@ -1,0 +1,31 @@
+# k6 load-test runner — runs on demand, does not start with the main app stack.
+#
+# On test stand (same host as backend, Docker network naming-check-net):
+#   cd infra/load-testing
+#   docker compose -f docker-compose.load-testing.yml --env-file .env.load run --rm k6 run /scripts/smoke.js
+#
+# From repo root:
+#   bash scripts/load/run-smoke-load-test.sh
+#
+services:
+  k6:
+    image: grafana/k6:0.54.0
+    container_name: k6-load-runner
+    profiles:
+      - load-test
+    networks:
+      - naming-check-net
+    volumes:
+      - ./k6/scripts:/scripts:ro
+      - ./k6/data:/data:ro
+    environment:
+      LOAD_TEST_BASE_URL: ${LOAD_TEST_BASE_URL:?LOAD_TEST_BASE_URL is required}
+      LOAD_TEST_PROFILE: ${LOAD_TEST_PROFILE:-baseline}
+      K6_OUT: ${K6_OUT:-}
+    # Override command when invoking: docker compose run --rm k6 run /scripts/smoke.js
+    entrypoint: ["k6"]
+    command: ["version"]
+
+networks:
+  naming-check-net:
+    external: true

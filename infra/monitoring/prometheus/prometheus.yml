@@ -3,6 +3,7 @@ global:
   evaluation_interval: 15s
 
 rule_files:
+  - /etc/prometheus/recording_rules.yml
   - /etc/prometheus/alerts.yml
 
 alerting:
@@ -34,6 +35,14 @@ scrape_configs:
   - job_name: text-model-service
     static_configs:
       - targets: ["text-model-service:9000"]
+
+  # Database exporters — enable after PostgreSQL / ClickHouse are deployed.
+  # - job_name: postgresql
+  #   static_configs:
+  #     - targets: ["postgres-exporter:9187"]
+  # - job_name: clickhouse
+  #   static_configs:
+  #     - targets: ["clickhouse-exporter:9116"]
 
   - job_name: blackbox-http
     metrics_path: /probe

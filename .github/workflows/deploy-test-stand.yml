@@ -581,3 +581,27 @@ jobs:
             fi
           fi
           VERIFY
+
+      - name: Prepare load test environment on test stand
+        run: |
+          ssh ${{ env.GHA_SSH_OPTS }} -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -p "$REMOTE_PORT" \
+            "${{ secrets.TEST_STAND_USER }}@${{ secrets.TEST_STAND_HOST }}" \
+            env REMOTE_APP_DIR="$REMOTE_APP_DIR" TEST_STAND_HOST="${{ secrets.TEST_STAND_HOST }}" \
+            bash -s <<'LOAD_PREP'
+          set -euo pipefail
+          cd "${REMOTE_APP_DIR}"
+          LOAD_ENV="${REMOTE_APP_DIR}/infra/load-testing/.env.load"
+          if [[ ! -f "${LOAD_ENV}" ]]; then
+            cp infra/load-testing/.env.load.example "${LOAD_ENV}"
+          fi
+          if ! grep -q '^LOAD_TEST_VERIFY_URL=' "${LOAD_ENV}"; then
+            echo "LOAD_TEST_VERIFY_URL=http://127.0.0.1:8000" >> "${LOAD_ENV}"
+          fi
+          if [[ -n "${TEST_STAND_HOST:-}" ]] && ! grep -q "${TEST_STAND_HOST}" "${LOAD_ENV}"; then
+            sed -i "s/^LOAD_TEST_ALLOWED_HOSTS=.*/LOAD_TEST_ALLOWED_HOSTS=localhost,127.0.0.1,naming-check-backend,${TEST_STAND_HOST}/" "${LOAD_ENV}" || true
+          fi
+          docker pull grafana/k6:0.54.0
+          bash scripts/load/verify-load-test-ready.sh
+          bash scripts/load/verify-metrics-collection.sh || echo "::warning::Metrics not fully populated yet (run traffic after deploy)."
+          echo "Load test environment prepared on test stand."
+          LOAD_PREP

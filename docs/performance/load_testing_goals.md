@@ -132,7 +132,7 @@
 
 **Concurrent users (VU):** normal — **5**, peak — **15**, stress — ramp 5 → 30.
 
-> Конкретные RPS уточняются после первого baseline-прогона на test stand и фиксируются в отчёте о нагрузочном тестировании.
+> Конкретные RPS уточняются после первого **stress-теста** на test stand. До этого на дашборде **Load Testing** отображаются **плановые** уровни (normal ~3, peak ~7 RPS), а не измеренная ёмкость. Smoke-тест (~1.6 RPS, 1 VU) подтверждает только работоспособность.
 
 ### 4.5. Метрики нагрузки на БД (целевой продукт)
 
@@ -199,12 +199,12 @@
 
 **Артефакты после прогона:**
 
-1. Отчёт: дата, окружение, профиль, версия образа (git SHA).
-2. Таблица метрик: RPS, p50/p95/p99, error rate, CPU/RAM max/avg.
-3. Скриншоты / export Grafana panels.
-4. Список найденных bottleneck'ов и рекомендации.
+1. Отчёт: [`load_test_report_template.md`](load_test_report_template.md) или авто-черновик `--report`
+2. Метрики: `bash scripts/load/export-load-test-summary.sh` (RPS, p50/p95/p99, error rate, CPU/RAM)
+3. Скриншоты / export Grafana panels (Load Testing)
+4. Список найденных bottleneck'ов и рекомендации
 
-Скрипты нагрузочного тестирования — в `backend/scripts/load/` (следующий этап после утверждения этого документа).
+Скрипты нагрузочного тестирования — в `backend/scripts/load/`; окружение описано в [`load_test_environment.md`](load_test_environment.md).
 
 ---
 
@@ -212,14 +212,15 @@
 
 | Метрика теста | Grafana panel / Prometheus metric |
 |---------------|-----------------------------------|
-| RPS | `rate(http_requests_total[1m])` — dashboard `services-metrics` |
-| Latency p95/p99 | `histogram_quantile` — panel «Slowest handlers (p95)» |
-| Error rate | `http_requests_total{status=~"4xx\|5xx"}` / total |
-| CPU/RAM хоста | dashboard `infrastructure` |
-| CPU/RAM контейнеров | cAdvisor panels |
+| RPS | `naming_check:load_test:http_requests:rate5m` — dashboard **Load Testing** |
+| Latency p95/p99 | `naming_check:load_test:http_request_duration_seconds:p95/p99` |
+| RPS по сценариям | `naming_check:scenario_rps:rate5m` |
+| Error rate | `naming_check:load_test:http_requests_error_rate:percent5m` |
+| CPU/RAM хоста | dashboard **Load Testing** → Infrastructure row |
+| CPU/RAM контейнеров | cAdvisor panels на **Load Testing** |
 | Health | `service_health_status`, blackbox `probe_success` |
 
-Runbook при инцидентах во время теста: [`infra/monitoring/docs/alerting_runbook.md`](../infra/monitoring/docs/alerting_runbook.md).
+Документация сбора метрик: [`infra/monitoring/docs/metrics_collection.md`](../infra/monitoring/docs/metrics_collection.md).
 
 ---
 

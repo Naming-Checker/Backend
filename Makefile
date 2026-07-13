@@ -10,7 +10,7 @@ TXT_RESET := \e[0m
 .PHONY: start stop migrations docker-migrations-up docker-migrations-down \
 	docker-migrations-create isort black format ruff_format ruff_lint \
 	flake8 mypy lint test test-ci ruff-ci mypy-ci docker-test \
-	docker-auto_test ci check
+  docker-auto_test ci check load-test-prepare load-test-verify load-test-smoke load-test-metrics load-test-export load-test-report
 
 start:
 	docker-compose up --build -d
@@ -97,3 +97,24 @@ docker-auto_test:
 	@docker-compose up -d app && docker exec -it backend_app pytest tests/autotests -p no:warnings -v
 
 check: format lint test
+
+load-test-prepare:
+	bash scripts/load/prepare-load-test-env.sh
+
+load-test-verify:
+	bash scripts/load/verify-load-test-ready.sh
+
+load-test-smoke:
+	bash scripts/load/run-smoke-load-test.sh
+
+load-test-metrics:
+	bash scripts/load/verify-metrics-collection.sh
+
+load-test-export:
+	bash scripts/load/export-load-test-summary.sh
+
+load-test-report:
+	@mkdir -p docs/performance/reports
+	PROFILE=$(or $(PROFILE),smoke) LOOKBACK=$(or $(LOOKBACK),15m) GIT_SHA=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown) \
+		OUTPUT=docs/performance/reports/$(PROFILE)-$$(date +%Y-%m-%d).md \
+		bash scripts/load/export-load-test-summary.sh --report

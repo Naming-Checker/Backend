@@ -16,6 +16,12 @@
       "title": "Infrastructure",
       "type": "link",
       "url": "/d/infrastructure/infrastructure"
+    },
+    {
+      "icon": "dashboard",
+      "title": "Load Testing",
+      "type": "link",
+      "url": "/d/load-testing/load-testing"
     }
   ],
   "panels": [
