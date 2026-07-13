@@ -54,6 +54,14 @@ docker compose -f "${COMPOSE_FILE}" \
   -e LOAD_TEST_RPS="${LOAD_TEST_RPS:-}" \
   -e LOAD_TEST_STAGES="${LOAD_TEST_STAGES:-}" \
   -e LOAD_TEST_ITERATION_SLEEP_SECONDS="${LOAD_TEST_ITERATION_SLEEP_SECONDS:-}" \
+  -e LOAD_TEST_S1_WEIGHT="${LOAD_TEST_S1_WEIGHT:-}" \
+  -e LOAD_TEST_S2_WEIGHT="${LOAD_TEST_S2_WEIGHT:-}" \
+  -e LOAD_TEST_S3_WEIGHT="${LOAD_TEST_S3_WEIGHT:-}" \
+  -e LOAD_TEST_S4_WEIGHT="${LOAD_TEST_S4_WEIGHT:-}" \
+  -e K6_LOGO_FILE="${K6_LOGO_FILE:-}" \
+  -e K6_FALLBACK_PREVIEW_PATH="${K6_FALLBACK_PREVIEW_PATH:-}" \
+  -e K6_TEXT_TOP_K="${K6_TEXT_TOP_K:-}" \
+  -e K6_LOGO_TOP_K="${K6_LOGO_TOP_K:-}" \
   k6 run "/scripts/${PROFILE}.js"
 
 echo "Check Grafana → Naming Check → Load Testing for live metrics."

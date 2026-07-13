@@ -100,6 +100,14 @@ class SimilarityEngine:
         return self._encode_tensor(img)
 
     def _encode_tensor(self, image_chw: torch.Tensor) -> torch.Tensor:
+        if image_chw.dim() != 3:
+            msg = f"Expected CHW image tensor, got shape {tuple(image_chw.shape)}"
+            raise ValueError(msg)
+        _, height, width = image_chw.shape
+        # Tiny uploads (e.g. 1×1) blow up VGG preprocess / inference with opaque 500s.
+        if height < 8 or width < 8:
+            msg = f"Image too small ({width}x{height}); minimum is 8x8 pixels"
+            raise ValueError(msg)
         rgb = _to_three_channel_chw(image_chw)
         x = self._transform(rgb).unsqueeze(0).to(self._device)
         with torch.inference_mode():
