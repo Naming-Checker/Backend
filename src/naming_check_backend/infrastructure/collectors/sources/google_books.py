@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse
+from typing import Any, cast
+from urllib.parse import ParseResult, parse_qs, urlencode, urljoin, urlparse
 
 from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -178,8 +178,10 @@ class GoogleUdm36SearchProvider(TextSearchProvider):
             )
 
     async def _extract_results_from_dom(self) -> list[dict[str, str]]:
-        return await self._page.evaluate(
-            r"""
+        return cast(
+            list[dict[str, str]],
+            await self._page.evaluate(
+                r"""
             () => {
                 const cleanText = (value) => {
                     if (!value) {
@@ -635,6 +637,7 @@ class GoogleUdm36SearchProvider(TextSearchProvider):
                 return results;
             }
             """
+            ),
         )
 
     def _normalize_result_url(
@@ -671,7 +674,7 @@ class GoogleUdm36SearchProvider(TextSearchProvider):
         return raw_url
 
     @staticmethod
-    def _is_google_redirect_url(parsed_url) -> bool:
+    def _is_google_redirect_url(parsed_url: ParseResult) -> bool:
         host = parsed_url.netloc.lower()
         path = parsed_url.path.lower()
 
@@ -692,8 +695,8 @@ class GoogleUdm36SearchProvider(TextSearchProvider):
         }
 
     @staticmethod
-    def _extract_wrapped_url(parsed_url) -> str | None:
-        query = parse_qs(parsed_url.query)
+    def _extract_wrapped_url(parsed_url: ParseResult) -> str | None:
+        query: dict[str, list[str]] = parse_qs(parsed_url.query)
 
         for key in ("q", "url", "u", "target", "to"):
             values = query.get(key)
@@ -710,7 +713,7 @@ class GoogleUdm36SearchProvider(TextSearchProvider):
         return None
 
     @staticmethod
-    def _is_blocked_google_url(parsed_url) -> bool:
+    def _is_blocked_google_url(parsed_url: ParseResult) -> bool:
         host = parsed_url.netloc.lower()
         path = parsed_url.path.lower()
 
