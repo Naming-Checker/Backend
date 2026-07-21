@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
-from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import Page
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from naming_check_backend.infrastructure.collectors.search_provider import (
     TextSearchProvider,
