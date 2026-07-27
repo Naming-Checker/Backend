@@ -223,6 +223,8 @@ jobs:
           APP_PORT=9000
           EMBEDDINGS_PT_PATH=/app/models/logos_embedding.pt
           EMBEDDINGS_CSV_PATH=/app/models/logos_embedding.csv
+          MODEL_WEIGHTS_PATH=/app/models/similarity.safetensors
+          COLORS_CSV_PATH=/app/models/logos_embedding_colors.csv
           ASSETS_ROOT=/app/assets
           ELASTIC_APM_ENABLED=true
           ELASTIC_APM_SERVER_URL=http://apm-server:8200

@@ -113,7 +113,7 @@ CORS_ALLOW_CREDENTIALS=false
 - `TEST_STAND_APP_DIR` (по умолчанию `/opt/naming-check-backend`)
 - `TEST_STAND_BIND_PORT` (по умолчанию `8000`, публикация порта контейнера бэкенда наружу)
 - `TEST_STAND_ENV_FILE` (многострочный runtime `.env` для контейнера бэкенда; при необходимости переопределите `VISUAL_MODEL_SERVICE_BASE_URL` и `TEXT_MODEL_SERVICE_BASE_URL` — в деплое по умолчанию `http://visual-model-service:9000` и `http://text-model-service:9000` в общей Docker-сети)
-- `TEST_STAND_VISUAL_MODELS_DIR` (хост-путь к папке с **`logos_embedding.pt`** и **`logos_embedding.csv`**, по умолчанию `/opt/visual-model-models`)
+- `TEST_STAND_VISUAL_MODELS_DIR` (хост-путь к папке с **`logos_embedding.pt`**, **`logos_embedding.csv`**, **`similarity.safetensors`**, **`logos_embedding_colors.csv`**, по умолчанию `/opt/visual-model-models`)
 - `TEST_STAND_VISUAL_DATA_DIR` (хост-путь к корню с изображениями логотипов для preview, по умолчанию `/opt/visual-model-data`)
 - `TEST_STAND_VISUAL_BIND_PORT` (порт на **localhost** сервера для визуального сервиса, по умолчанию `9000`; наружу не торчит, только `127.0.0.1`)
 - `TEST_STAND_VISUAL_ENV_FILE` (доп. строки в `.env` визуального сервиса)
@@ -197,7 +197,9 @@ k6 запускается в Docker (`infra/load-testing/`), цель — тол
 
 ```bash
 sudo mkdir -p /opt/visual-model-models
-sudo cp logos_embedding.pt logos_embedding.csv /opt/visual-model-models/
+sudo cp logos_embedding.pt logos_embedding.csv \
+  similarity.safetensors logos_embedding_colors.csv \
+  /opt/visual-model-models/
 ```
 
 Из монорепы (рядом `VisualModel/`): после настройки **SSH по ключу**:
