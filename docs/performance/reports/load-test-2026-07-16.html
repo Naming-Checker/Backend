@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Отчёт НТ vs бизнес-требования</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="" />
+
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+         font-size: 11pt; line-height: 1.45; color: #111; max-width: 900px; margin: 1.5cm auto; }
+  h1 { font-size: 18pt; }
+  h2 { font-size: 14pt; margin-top: 1.4em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  h3 { font-size: 12pt; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 9.5pt; }
+  th, td { border: 1px solid #999; padding: 4px 6px; vertical-align: top; }
+  th { background: #f0f0f0; text-align: left; }
+  code { font-size: 9pt; }
+  strong { font-weight: 600; }
+  @page { size: A4; margin: 1.5cm; }
+</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Отчёт НТ vs бизнес-требования</h1>
+</header>
+<h1 id="отчёт-о-нагрузочном-тестировании-vs-бизнес-требования">Отчёт о
+нагрузочном тестировании vs бизнес-требования</h1>
+<table>
+<colgroup>
+<col style="width: 37%" />
+<col style="width: 62%" />
+</colgroup>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Значение</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Дата прогона</td>
+<td>2026-07-16 (UTC 15:49–16:20)</td>
+</tr>
+<tr>
+<td>Окружение</td>
+<td>test-stand VPS <code>45.91.236.105</code> (CPU, 2 vCPU / 3.8 GiB
+RAM)</td>
+</tr>
+<tr>
+<td>Цель API</td>
+<td><code>http://naming-check-backend:8000</code> (k6 на стенде)</td>
+</tr>
+<tr>
+<td>Инструмент</td>
+<td>k6, профили smoke / baseline / stress</td>
+</tr>
+<tr>
+<td>Сценарии</td>
+<td>mixed S1–S4 (веса 60% / 25% / 10% / 5%)</td>
+</tr>
+<tr>
+<td>Сырые логи</td>
+<td><code>smoke.log</code>, <code>baseline.log</code>,
+<code>stress.log</code>, <code>meta.txt</code></td>
+</tr>
+<tr>
+<td>Источники требований</td>
+<td><code>Documentation/requirements.md</code>, MoSCoW M12,
+<code>quality_plan.md</code> Gate 2,
+<code>docs/performance/load_testing_goals.md</code> §4–§6</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="итоговый-вердикт">1. Итоговый вердикт</h2>
+<p><strong>Продуктовым SLA из ТЗ формально не закрываем:</strong> они
+относятся к полному пайплайну (full query &lt; 2 мин, Stage 1 P95/P99,
+Stage 2 ≤ 120 с), которого в MVP-прогоне k6 нет.</p>
+<p><strong>По операционным MVP SLO на CPU-стенде:</strong></p>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 29%" />
+<col style="width: 41%" />
+</colgroup>
+<thead>
+<tr>
+<th>Профиль</th>
+<th>Вердикт</th>
+<th>Комментарий</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Smoke (1 VU, 30 с)</td>
+<td><strong>PASS</strong></td>
+<td>error 0%, p95 ≈ 0.80 с</td>
+</tr>
+<tr>
+<td>Baseline (1 VU, 10 мин)</td>
+<td><strong>PASS</strong></td>
+<td>error 0%, p95 ≈ 0.73 с, ~0.8 iter/s</td>
+</tr>
+<tr>
+<td>Stress (ramp 5→30 VU, 20 мин)</td>
+<td><strong>FAIL</strong></td>
+<td>error <strong>26.8%</strong>, checks 74.6%, p95 ≈ 2.40 с</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Главный gap:</strong> под stress падает
+<code>visual-model-service</code> (502/503 на logo search / preview).
+Текст (S1) и health (S4) держат нагрузку на 100%.</p>
+<hr />
+<h2 id="соответствие-продуктовым-sla-тз-gate-2">2. Соответствие
+продуктовым SLA (ТЗ / Gate 2)</h2>
+<table>
+<colgroup>
+<col style="width: 30%" />
+<col style="width: 15%" />
+<col style="width: 20%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Требование</th>
+<th>Цель</th>
+<th>Статус</th>
+<th>Комментарий</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Full query end-to-end</td>
+<td>&lt; 2 мин</td>
+<td><strong>N/A / не измерено</strong></td>
+<td>Нет сценариев S5+S8 в MVP k6</td>
+</tr>
+<tr>
+<td>Stage 1 internal response</td>
+<td>P95 ≤ 60 с, P99 ≤ 100 с</td>
+<td><strong>N/A</strong></td>
+<td>Нет staged registration-check</td>
+</tr>
+<tr>
+<td>Stage 2 delivery</td>
+<td>SLA ≤ 120 с</td>
+<td><strong>N/A</strong></td>
+<td>Async webhook не в прогоне</td>
+</tr>
+<tr>
+<td>Availability</td>
+<td>99.5%–99.9%</td>
+<td><strong>не подтверждено</strong></td>
+<td>Нет soak; Prometheus/Grafana на стенде были down</td>
+</tr>
+<tr>
+<td>Deploy on NVIDIA A100</td>
+<td>MoSCoW M12</td>
+<td><strong>среда не соответствует</strong></td>
+<td>Прогон на CPU VPS, не A100</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Вывод по бизнесу:</strong> релизный Gate 2 по latency полного
+запроса <strong>не может быть закрыт</strong> этим прогоном.
+Smoke/baseline подтверждают только работоспособность similarity API, не
+продуктовый SLA.</p>
+<hr />
+<h2 id="соответствие-операционным-mvp-slo-load_testing_goals-46">3.
+Соответствие операционным MVP SLO (load_testing_goals §4–§6)</h2>
+<table>
+<colgroup>
+<col style="width: 38%" />
+<col style="width: 34%" />
+<col style="width: 11%" />
+<col style="width: 15%" />
+</colgroup>
+<thead>
+<tr>
+<th>Критерий PASS (§6)</th>
+<th>Цель (CPU stand)</th>
+<th>Факт</th>
+<th>Статус</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P1 Error rate S1–S4</td>
+<td>&lt; 1% (5xx)</td>
+<td>smoke/baseline 0%; stress <strong>26.8%</strong></td>
+<td><strong>FAIL</strong> (stress)</td>
+</tr>
+<tr>
+<td>P2 Latency P95</td>
+<td>≤ 10 с (S1) / ≤ 30 с (S2)</td>
+<td>mixed stress p95 <strong>2.40 с</strong></td>
+<td>OK по latency</td>
+</tr>
+<tr>
+<td>P3 RPS peak ~7 без деградации §5</td>
+<td>~7 RPS, error &lt; 1%</td>
+<td>~7.7 iter/s overall, массовые 5xx</td>
+<td><strong>FAIL</strong></td>
+</tr>
+<tr>
+<td>P4 CPU/RAM не critical (&gt;90%)</td>
+<td>&lt; 90%</td>
+<td>load avg ~12 после stress; RAM ~3.2 / 3.8 GiB</td>
+<td><strong>FAIL / риск</strong></td>
+</tr>
+<tr>
+<td>P6 Метрики Grafana/Prometheus</td>
+<td>без пробелов</td>
+<td>стек мониторинга не поднят</td>
+<td><strong>FAIL</strong></td>
+</tr>
+<tr>
+<td>P7 Результаты задокументированы</td>
+<td>отчёт</td>
+<td>этот документ + PDF</td>
+<td>OK</td>
+</tr>
+<tr>
+<td>Тактический gate</td>
+<td>&gt; 95% success under target RPS</td>
+<td>stress success ~<strong>73%</strong></td>
+<td><strong>FAIL</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="плановые-rps-4.4-vs-факт">Плановые RPS (§4.4) vs факт</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 42%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>Уровень</th>
+<th>План</th>
+<th>Факт</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Normal mixed</td>
+<td>~3 RPS</td>
+<td>baseline ~0.8 iter/s при 1 VU (ниже normal; без ошибок)</td>
+</tr>
+<tr>
+<td>Peak mixed</td>
+<td>~7 RPS</td>
+<td>stress overall ~7.7 iter/s, mid (~15 VU) ~10.4 — <strong>без SLA по
+ошибкам</strong></td>
+</tr>
+<tr>
+<td>Stress max VU</td>
+<td>ramp → 30</td>
+<td>max VU ~29; на пике throughput падает (~0.8 iter/s) из‑за очереди
+visual</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="результаты-прогонов-k6">4. Результаты прогонов (k6)</h2>
+<h3 id="сводка">4.1. Сводка</h3>
+<table>
+<colgroup>
+<col style="width: 12%" />
+<col style="width: 19%" />
+<col style="width: 13%" />
+<col style="width: 16%" />
+<col style="width: 11%" />
+<col style="width: 18%" />
+<col style="width: 8%" />
+</colgroup>
+<thead>
+<tr>
+<th>Профиль</th>
+<th>Длительность</th>
+<th>Итерации</th>
+<th>Error rate</th>
+<th>Checks</th>
+<th>p95 latency</th>
+<th>Exit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Smoke</td>
+<td>30 с</td>
+<td>24</td>
+<td>0%</td>
+<td>100%</td>
+<td>0.80 с</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Baseline</td>
+<td>10 мин</td>
+<td>489</td>
+<td>0%</td>
+<td>100%</td>
+<td>0.73 с</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Stress</td>
+<td>20 мин</td>
+<td>9247</td>
+<td><strong>26.8%</strong></td>
+<td><strong>74.6%</strong></td>
+<td>2.40 с</td>
+<td>99</td>
+</tr>
+</tbody>
+</table>
+<h3 id="разбивка-ошибок-backend-за-окно-stress-логи">4.2. Разбивка
+ошибок backend за окно stress (логи)</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>Эндпоинт</th>
+<th>HTTP 200</th>
+<th>502</th>
+<th>503</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /api/v1/text-similarity/search</code> (S1)</td>
+<td><strong>5605</strong></td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/health</code> (S4)</td>
+<td><strong>850</strong></td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/logo-similarity/search</code> (S2)</td>
+<td>107</td>
+<td><strong>1578</strong></td>
+<td><strong>624</strong></td>
+</tr>
+<tr>
+<td><code>GET /api/v1/logo-similarity/preview</code> (S3)</td>
+<td>245</td>
+<td><strong>267</strong></td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>S2 success rate ≈ <strong>4.6%</strong> (107 / 2309).</li>
+<li>S1 и S4 — <strong>100%</strong> успех.</li>
+<li>Корневая причина: перегрузка / недоступность
+<code>visual-model-service</code> (503 busy + 502 через backend).</li>
+</ul>
+<h3 id="ресурсы-хоста-после-stress">4.3. Ресурсы хоста (после
+stress)</h3>
+<ul>
+<li>vCPU: <strong>2</strong></li>
+<li>RAM: ~<strong>3.2 GiB used / 3.8 GiB total</strong></li>
+<li>Load average сразу после: ~<strong>12</strong> (1 / 5 / 15 min: 0.47
+/ 11.67 / 12.49)</li>
+</ul>
+<hr />
+<h2 id="где-не-соответствуем-подсветка">5. Где не соответствуем
+(подсветка)</h2>
+<ol type="1">
+<li><strong>Error rate под нагрузкой</strong> — главный gap к §6 P1 и
+tactical &gt;95%: при ramp 5→30 VU visual отдаёт 502/503; mixed error
+<strong>26.8%</strong> при цели <strong>&lt;1%</strong>.</li>
+<li><strong>Ёмкость с logo в mix</strong> — плановый peak ~7 RPS
+достижим по throughput, но <strong>не с SLA по ошибкам</strong> (§6
+P3).</li>
+<li><strong>Продуктовые SLA ТЗ</strong> — не валидированы (нет full
+query / Stage 1–2).</li>
+<li><strong>Наблюдаемость (P6)</strong> — нет time-series CPU/RAM/RPS из
+Prometheus за прогон.</li>
+<li><strong>Целевое железо A100</strong> — бизнес предполагает GPU;
+CPU-стенд занижает capacity visual и не закрывает MoSCoW M12 как среду
+приёмки.</li>
+</ol>
+<hr />
+<h2 id="анализ-что-нужно-исправить">6. Анализ: что нужно исправить</h2>
+<h3 id="приоритет-1-разблокировать-peak-с-error-1">Приоритет 1 —
+разблокировать peak с error &lt; 1%</h3>
+<ol type="1">
+<li>Ограничить concurrency <code>visual-model-service</code> (очередь /
+semaphore / worker pool); отдавать осмысленный <strong>503</strong> и
+сделать retry/backoff на backend.</li>
+<li>Исключить reload embeddings / рестарт engine mid-load (в логах
+stress наблюдалась перезагрузка модели).</li>
+<li>Вынести visual на больший CPU/GPU или отдельный инстанс; поднять
+лимиты контейнера (сейчас 2 vCPU / ~4 GiB на весь стек).</li>
+<li>Повторить профиль <strong>peak</strong> (15 VU / ~7 RPS) и отдельно
+<strong>S2-only</strong> capacity, пока error rate &lt; 1%.</li>
+</ol>
+<h3 id="приоритет-2-закрыть-gap-к-бизнесу">Приоритет 2 — закрыть gap к
+бизнесу</h3>
+<ol type="1">
+<li>Поднять Prometheus + Grafana на стенде <strong>до</strong>
+следующего прогона (критерий P6).</li>
+<li>После появления S5/S8 добавить E2E timing: full query &lt; 2 мин,
+Stage 1 P95/P99, Stage 2 ≤ 120 с (Gate 2).</li>
+<li>Зафиксировать <strong>измеренную</strong> устойчивую ёмкость (макс.
+RPS при error &lt; 1%) в <code>load_testing_goals.md</code> и на
+дашборде Load Testing.</li>
+</ol>
+<h3 id="приоритет-3-процесс">Приоритет 3 — процесс</h3>
+<ol type="1">
+<li>Не считать smoke/baseline = соответствие продуктовому SLA.</li>
+<li>Документировать каждый прогон по §6 PASS/FAIL (этот отчёт —
+образец).</li>
+<li>Для релизной приёмки планировать прогон на <strong>A100</strong>
+(MoSCoW M12), не только на CPU VPS.</li>
+</ol>
+<hr />
+<h2 id="рекомендуемый-следующий-шаг">7. Рекомендуемый следующий шаг</h2>
+<ol type="1">
+<li>Починить concurrency/стабильность visual.</li>
+<li>Поднять monitoring stack.</li>
+<li>Прогон: <code>peak</code> (target ~7 RPS) + <code>S2-only</code>
+ramp → зафиксировать max RPS при error &lt; 1%.</li>
+<li>Обновить цели ёмкости и закрыть issue по capacity.</li>
+</ol>
+<hr />
+<h2 id="приложения">8. Приложения</h2>
+<ul>
+<li>Сырые логи k6: <code>smoke.log</code>, <code>baseline.log</code>,
+<code>stress.log</code></li>
+<li>Метаданные: <code>meta.txt</code> (<code>smoke_exit=0</code>,
+<code>baseline_exit=0</code>, <code>stress_exit=99</code>)</li>
+<li>Цели: <code>docs/performance/load_testing_goals.md</code></li>
+<li>Шаблон:
+<code>docs/performance/load_test_report_template.md</code></li>
+</ul>
+</body>
+</html>
