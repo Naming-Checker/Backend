@@ -12,7 +12,8 @@
 #   VISUAL_ARTIFACT_USER  - default root (prefer non-root deploy user if configured)
 #
 # Remote layout matches deploy workflow mounts:
-#   /opt/visual-model-models     -> logos_embedding.pt, logos_embedding.csv
+#   /opt/visual-model-models     -> logos_embedding.pt/.csv, similarity.safetensors,
+#                                   logos_embedding_colors.csv
 #   /opt/visual-model-data       -> subtree so paths like data/logos/... exist under it
 #
 
@@ -36,6 +37,21 @@ if [[ ! -f "$MODELS_SRC/logos_embedding.pt" || ! -f "$MODELS_SRC/logos_embedding
   exit 1
 fi
 
+SYNC_FILES=(
+  "$MODELS_SRC/logos_embedding.pt"
+  "$MODELS_SRC/logos_embedding.csv"
+)
+if [[ -f "$MODELS_SRC/similarity.safetensors" ]]; then
+  SYNC_FILES+=("$MODELS_SRC/similarity.safetensors")
+else
+  echo "Warning: similarity.safetensors missing in $MODELS_SRC (ImageNet fallback on service)" >&2
+fi
+if [[ -f "$MODELS_SRC/logos_embedding_colors.csv" ]]; then
+  SYNC_FILES+=("$MODELS_SRC/logos_embedding_colors.csv")
+else
+  echo "Warning: logos_embedding_colors.csv missing in $MODELS_SRC (color re-rank disabled)" >&2
+fi
+
 if [[ ! -d "$LOGOS_SRC" ]]; then
   echo "Missing logos directory: $LOGOS_SRC (needed for CSV paths under data/logos/)" >&2
   exit 1
@@ -44,14 +60,13 @@ fi
 echo "Ensuring directories on ${HOST} ..."
 "${SSH[@]}" "mkdir -p /opt/visual-model-models '/opt/visual-model-data/data/logos' && chown -R root:root /opt/visual-model-models /opt/visual-model-data 2>/dev/null || true"
 
-echo "Rsync embeddings (~386MB) ..."
+echo "Rsync visual artifacts ..."
 # BSD rsync (macOS) has no --info=progress2; --progress works on both BSD and GNU.
 RSYNC_OPTS=(-az --partial --progress --stats)
 
 rsync "${RSYNC_OPTS[@]}" \
   -e "ssh -o StrictHostKeyChecking=accept-new" \
-  "$MODELS_SRC/logos_embedding.pt" \
-  "$MODELS_SRC/logos_embedding.csv" \
+  "${SYNC_FILES[@]}" \
   "${REMOTE_USER}@${HOST}:/opt/visual-model-models/"
 
 echo "Rsync logos (large, may take long) ..."

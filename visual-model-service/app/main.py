@@ -32,11 +32,21 @@ _engine: SimilarityEngine | None = None
 def _sync_load_engine() -> SimilarityEngine | None:
     """Blocking load; run via asyncio.to_thread so Uvicorn binds and /health responds while loading."""
     try:
+        colors_path = (settings.colors_csv_path or "").strip() or None
+        weights_path = (settings.model_weights_path or "").strip() or None
         eng = SimilarityEngine(
             embeddings_pt_path=settings.embeddings_pt_path,
             embeddings_csv_path=settings.embeddings_csv_path,
+            model_weights_path=weights_path,
+            colors_csv_path=colors_path,
+            palette_size=settings.palette_size,
+            color_rerank_pool=settings.color_rerank_pool,
+            color_workers=settings.color_workers,
         )
-        logger.info("similarity engine ready")
+        logger.info(
+            "similarity engine ready",
+            extra={"color_enabled": eng.color_enabled, "model_weights": weights_path},
+        )
         return eng
     except FileNotFoundError as exc:
         logger.warning("similarity engine not loaded", extra={"error": str(exc)})
@@ -92,8 +102,9 @@ def engine_or_503() -> SimilarityEngine:
         raise HTTPException(
             status_code=503,
             detail=(
-                "Model not ready: ensure logos_embedding.pt and logos_embedding.csv are mounted "
-                f"under {settings.embeddings_pt_path.rsplit('/', 1)[0]}/"
+                "Model not ready: ensure embeddings (.pt/.csv), optional similarity.safetensors "
+                f"and logos_embedding_colors.csv are mounted under "
+                f"{settings.embeddings_pt_path.rsplit('/', 1)[0]}/"
             ),
         )
     return _engine
