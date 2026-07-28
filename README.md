@@ -33,19 +33,13 @@ make test
 
 ## Text similarity (TextModel + sidecar)
 
-Исходники пайплайна (офлайн, без вызовов HF из рантайма контейнера при `local_files_only`) лежат в каталоге **`TextModel/`** в монорепе: см. [`TextModel/src/README.md`](../TextModel/src/README.md) — установка зависимостей, скачивание snapshot **`cointegrated/rubert-tiny2`** в `TextModel/models/rubert-tiny2`, сборка индекса:
+Исходники пайплайна (офлайн, без вызовов HF из рантайма контейнера при `local_files_only`) лежат в каталоге **`TextModel/`** в монорепе: см. [`TextModel/src/README.md`](../TextModel/src/README.md). Текущий индекс — **LaBSE** (`sentence-transformers/LaBSE`, dim 768):
 
-```bash
-cd ../TextModel
-python src/embedding.py \
-  --csv data/temp_trademark.csv \
-  --model-path models/rubert-tiny2 \
-  --output-pt models/text_embedding.pt
-```
+- `embeddings.pt` / `embeddings.f16.npy` (+ `.meta.json`)
+- `aliases.parquet`, `class_mask.npy`, `manifest.json`
+- snapshot `models/LaBSE/`
 
-На выходе: `models/text_embedding.pt` и одноимённый sidecar **`models/text_embedding.csv`** (метаданные по строкам).
-
-Runtime similarity для тестового стенда и прокси-ручки backend — контейнер **`backend/text-model-service/`** ([`text-model-service/README.md`](text-model-service/README.md)): там же переменные `EMBEDDINGS_PT_PATH`, `EMBEDDINGS_CSV_PATH`, `MODEL_PATH` внутри контейнера (`/app/models/...`).
+Runtime similarity для тестового стенда и прокси-ручки backend — контейнер **`backend/text-model-service/`** ([`text-model-service/README.md`](text-model-service/README.md)): переменные `EMBEDDINGS_PT_PATH`, `ALIASES_PARQUET_PATH`, `CLASS_MASK_PATH`, `MODEL_PATH` внутри контейнера (`/app/models/...`).
 
 Пример запроса к backend (нужны запущенные backend и `text-model-service`, см. переменные ниже):
 
@@ -117,7 +111,7 @@ CORS_ALLOW_CREDENTIALS=false
 - `TEST_STAND_VISUAL_DATA_DIR` (хост-путь к корню с изображениями логотипов для preview, по умолчанию `/opt/visual-model-data`)
 - `TEST_STAND_VISUAL_BIND_PORT` (порт на **localhost** сервера для визуального сервиса, по умолчанию `9000`; наружу не торчит, только `127.0.0.1`)
 - `TEST_STAND_VISUAL_ENV_FILE` (доп. строки в `.env` визуального сервиса)
-- `TEST_STAND_TEXT_MODELS_DIR` (хост-путь к папке с **`text_embedding.pt`**, **`text_embedding.csv`** и **`rubert-tiny2/`**, по умолчанию `/opt/text-model-models`)
+- `TEST_STAND_TEXT_MODELS_DIR` (хост-путь к папке с **`embeddings.f16.npy`** / **`embeddings.pt`**, **`aliases.parquet`**, **`class_mask.npy`**, **`manifest.json`** и **`LaBSE/`**, по умолчанию `/opt/text-model-models`)
 - `TEST_STAND_TEXT_BIND_PORT` (порт на **localhost** сервера для текстового сервиса, по умолчанию `9100`; наружу не торчит, только `127.0.0.1`)
 - `TEST_STAND_TEXT_ENV_FILE` (доп. строки в `.env` текстового сервиса, например override `MODEL_PATH`)
 - `TEST_STAND_ELK_ENV_FILE` (обязательно для ELK: минимум `ELASTIC_PASSWORD=...`; см. `infra/logging/.env.elk.example`)
@@ -220,17 +214,17 @@ bash scripts/smoke-visual-service-local.sh /path/to/models
 
 ```bash
 sudo mkdir -p /opt/text-model-models
-sudo cp text_embedding.pt text_embedding.csv /opt/text-model-models/
-sudo rsync -a rubert-tiny2/ /opt/text-model-models/rubert-tiny2/
+sudo cp embeddings.f16.npy embeddings.f16.npy.meta.json aliases.parquet class_mask.npy manifest.json /opt/text-model-models/
+sudo rsync -a --exclude onnx --exclude .cache LaBSE/ /opt/text-model-models/LaBSE/
 ```
 
 Из монорепы (рядом `TextModel/`): после настройки **SSH по ключу**:
 
 ```bash
-bash scripts/sync-text-artifacts-to-test-stand.sh
+TEXT_ARTIFACTS_DIR=../TextModel/models bash scripts/sync-text-artifacts-to-test-stand.sh
 ```
 
-Скопирует `text_embedding.pt`, `text_embedding.csv` и snapshot `rubert-tiny2/` в `/opt/text-model-models/`.
+Скопирует индекс (memmap/pt + parquet + class_mask) и snapshot `LaBSE/` в `/opt/text-model-models/`.
 
 Локальная проверка контейнера текстового сервиса:
 

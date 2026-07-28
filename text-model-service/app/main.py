@@ -29,10 +29,13 @@ def _sync_load_engine() -> TextSimilarityEngine | None:
     try:
         engine = TextSimilarityEngine(
             embeddings_pt_path=settings.embeddings_pt_path,
-            embeddings_csv_path=settings.embeddings_csv_path,
+            aliases_parquet_path=settings.aliases_parquet_path,
+            class_mask_path=settings.class_mask_path,
             model_path=settings.model_path,
+            manifest_path=settings.manifest_path,
             encode_batch_size=settings.encode_batch_size,
             max_length=settings.max_length,
+            mmap_embeddings=settings.mmap_embeddings,
         )
         logger.info("text similarity engine ready")
         return engine
@@ -99,7 +102,7 @@ def engine_or_503() -> TextSimilarityEngine:
         raise HTTPException(
             status_code=503,
             detail=(
-                "Model not ready: ensure text_embedding.pt, text_embedding.csv and rubert-tiny2 "
+                "Model not ready: ensure embeddings.pt, aliases.parquet, class_mask.npy and LaBSE "
                 f"are mounted under {settings.embeddings_pt_path.rsplit('/', 1)[0]}/"
             ),
         )

@@ -245,9 +245,13 @@ jobs:
           APP_ENV=production
           APP_HOST=0.0.0.0
           APP_PORT=9000
-          EMBEDDINGS_PT_PATH=/app/models/text_embedding.pt
-          EMBEDDINGS_CSV_PATH=/app/models/text_embedding.csv
-          MODEL_PATH=/app/models/rubert-tiny2
+          EMBEDDINGS_PT_PATH=/app/models/embeddings.pt
+          ALIASES_PARQUET_PATH=/app/models/aliases.parquet
+          CLASS_MASK_PATH=/app/models/class_mask.npy
+          MANIFEST_PATH=/app/models/manifest.json
+          MODEL_PATH=/app/models/LaBSE
+          MAX_LENGTH=128
+          MMAP_EMBEDDINGS=true
           ELASTIC_APM_ENABLED=true
           ELASTIC_APM_SERVER_URL=http://apm-server:8200
           ELASTIC_APM_SERVICE_NAME=text-model-service
@@ -493,7 +497,7 @@ jobs:
             sleep 5
           done
           if [[ "${ok_text}" != 1 ]]; then
-            echo "::error::Text model did not reach health status=ok within ~10m. Often: missing text_embedding.pt/.csv, missing rubert-tiny2 snapshot, or OOM." >&2
+            echo "::error::Text model did not reach health status=ok within ~10m. Often: missing embeddings.pt/aliases.parquet/class_mask.npy, missing LaBSE snapshot, or OOM." >&2
             docker logs text-model-service --tail 300 >&2 || true
             exit 1
           fi
